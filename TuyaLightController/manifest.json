@@ -11,7 +11,7 @@
         }
       ],
       "SupportedInMultiActions": false,
-      "Tooltip": "Change the settings for all plugin actions",
+      "Tooltip": "Configure API URL, token, and default devices",
       "UUID": "com.gontz.tuyalightcontroller.globalsettingsaction",
       "PropertyInspectorPath": "Actions/GlobalSettingsAction/GlobalSettingsAction.html"
     },
@@ -32,7 +32,7 @@
       ],
       "DisableAutomaticStates": true,
       "SupportedInMultiActions": true,
-      "Tooltip": "Turn on or off one or more lights",
+      "Tooltip": "Turn selected Tuya lights and plugs on, off, or toggle them",
       "UUID": "com.gontz.tuyalightcontroller.turnonoffaction",
       "PropertyInspectorPath": "Actions/TurnOnOffAction/TurnOnOffAction.html"
     },
@@ -47,7 +47,7 @@
         }
       ],
       "SupportedInMultiActions": true,
-      "Tooltip": "Changes the color of one or more lights",
+      "Tooltip": "Set the color of one or more RGB Tuya lights",
       "UUID": "com.gontz.tuyalightcontroller.setcoloraction",
       "PropertyInspectorPath": "Actions/SetColorAction/SetColorAction.html"
     },
@@ -75,7 +75,7 @@
       "SupportedInMultiActions": false,
       "DisableCaching": true,
       "UserTitleEnabled": true,
-      "Tooltip": "A dial action that scrolls through colors",
+      "Tooltip": "Dial through hue values for RGB Tuya lights",
       "UUID": "com.gontz.tuyalightcontroller.setcolordialaction",
       "PropertyInspectorPath": "Actions/SetColorAction/SetColorDialAction.html"
     },
@@ -90,7 +90,7 @@
         }
       ],
       "SupportedInMultiActions": true,
-      "Tooltip": "Changes the color based on a temperature value of one or more lights",
+      "Tooltip": "Set white warmth for one or more Tuya lights",
       "UUID": "com.gontz.tuyalightcontroller.settemperatureaction",
       "PropertyInspectorPath": "Actions/SetTemperatureAction/SetTemperatureAction.html"
     },
@@ -118,7 +118,7 @@
       "SupportedInMultiActions": false,
       "DisableCaching": true,
       "UserTitleEnabled": true,
-      "Tooltip": "A dial action that changes the color based on a temperature value",
+      "Tooltip": "Dial white warmth for one or more Tuya lights",
       "UUID": "com.gontz.tuyalightcontroller.settemperaturedialaction",
       "PropertyInspectorPath": "Actions/SetTemperatureAction/SetTemperatureDialAction.html"
     },
@@ -133,7 +133,7 @@
         }
       ],
       "SupportedInMultiActions": true,
-      "Tooltip": "Changes the brightness of one or more lights",
+      "Tooltip": "Set brightness for one or more Tuya lights",
       "UUID": "com.gontz.tuyalightcontroller.setbrightnessaction",
       "PropertyInspectorPath": "Actions/SetBrightnessAction/SetBrightnessAction.html"
     },
@@ -161,7 +161,7 @@
       "SupportedInMultiActions": false,
       "DisableCaching": true,
       "UserTitleEnabled": true,
-      "Tooltip": "A dial action that adjusts the brightness",
+      "Tooltip": "Dial brightness for one or more Tuya lights",
       "UUID": "com.gontz.tuyalightcontroller.setbrightnessdialaction",
       "PropertyInspectorPath": "Actions/SetBrightnessAction/SetBrightnessDialAction.html"
     }

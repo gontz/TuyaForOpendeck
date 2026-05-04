@@ -2,76 +2,50 @@
 <html>
 <head>
     <meta charset="utf-8" />
-    <meta name=viewport content="width=device-width,initial-scale=1,maximum-scale=1,minimum-scale=1,user-scalable=no,minimal-ui,viewport-fit=cover">
-    <meta name=apple-mobile-web-app-capable content=yes>
-    <meta name=apple-mobile-web-app-status-bar-style content=black>
-    <title>GoveeLightController Global Settings</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,minimum-scale=1,user-scalable=no,minimal-ui,viewport-fit=cover">
+    <title>Tuya Light Controller - Global Settings</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/barraider/streamdeck-easypi-v2@latest/src/sdpi.css">
-    <script src="https://cdn.jsdelivr.net/gh/barraider/streamdeck-easypi-v2@latest/src/sdtools.common.js"></script>
-
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/barraider/streamdeck-easypi-v2@latest/src/rangeTooltip.css">
-    <script src="https://cdn.jsdelivr.net/gh/barraider/streamdeck-easypi-v2@latest/src/rangeTooltip.js"></script>
-
     <script src="https://sdpi-components.dev/releases/v3/sdpi-components.js"></script>
+    <script src="../_shared/tuyaDevicePicker.js"></script>
 </head>
 <body>
-    <div>
-        <div>
-            <h2>Setup Instructions</h2>
-            <strong>Set up the default devices that are controlled by the plugin here:</strong>
-            <ul>
-                <li>Turn on <strong>"LAN Control"</strong> for each light you want to control (you can do this using the Govee mobile app).</li>
-            </ul>
-            <ul>
-                <li>Your Govee devices need to be connected to the same network as the StreamDeck.</li>
-            </ul>
-            <ul>
-                <li>Your devices need to be able to communicate with each other in the network (this is usually the default in the router settings).</li>
-            </ul>
-            <ul>
-                <li><strong>Recommended:</strong> Give your devices a static IP inside the router settings.</li>
-            </ul>
-        </div>
-        <div>
-            <h3>Button Press</h3>
-            <p>Scan for available devices and automatically populate the "Device IP List". Don't forget to save if you want to keep the automatically found addresses</p>
-        </div>
-    </div>
-    <div class="sdpi-wrapper">
-        <div class="sdpi-item" id="dvDeviceIpList">
-            <div class="sdpi-item-label">Device IP List</div>
-            <sdpi-textarea class="sdpi-item-value sdProperty" setting="deviceIpListString" id="deviceIpListString"
-                           rows="6"></sdpi-textarea>
-        </div>
-        <div class="sdpi-item">
-            <div class="sdpi-item-label">Save Settings</div>
-            <button class="sdpi-item-value" onclick="setSettings()">Save</button>
-        </div>
-        <br />
-        <details style="border: 1px solid #ccc; border-radius: 5px; padding: 3px; background: #3d3d3d; font-size: 10px;">
-            <summary style="font-weight: bold; cursor: pointer;">Feedback and Support</summary>
-            <br />
-            <div>Links to Discord, guides and more can be found on the marketplace site!</div>
-            <button onclick="OpenMarketplaceLink()" style="font-size: 10px; padding: 3px">Marketplace</button>
-            <br />
-            <br />
-            <div>The plugin is free, but development is not. Any contribution or feedback no matter how small is greatly appreciated.</div>
-        </details>
-    </div>
-    
-
-    <script>
-        function OpenMarketplaceLink() {
-            if (websocket && (websocket.readyState === 1)) {
-                const json = {
-                    'event': 'openUrl',
-                    'payload': {
-                        'url': 'https://marketplace.elgato.com/product/govee-light-contoller-29d301d8-e245-497e-97e0-23fb09542bb1'
-                    }
-                };
-                websocket.send(JSON.stringify(json));
-            }
+<div class="sdpi-wrapper">
+    <sdpi-item label="API URL">
+        <sdpi-textfield setting="apiUrl" placeholder="http://localhost:5000"></sdpi-textfield>
+    </sdpi-item>
+    <sdpi-item label="API Token">
+        <sdpi-password setting="apiToken" placeholder="Authorization header, raw"></sdpi-password>
+    </sdpi-item>
+    <sdpi-item label="Default Devices">
+        <div id="picker" style="width: 100%"></div>
+    </sdpi-item>
+    <sdpi-item label="Test Connection">
+        <sdpi-button id="testBtn">Ping /devices</sdpi-button>
+    </sdpi-item>
+    <sdpi-item label="Status">
+        <div id="testResult" style="font-size:11px;opacity:.8"></div>
+    </sdpi-item>
+</div>
+<script>
+window.addEventListener('load', () => {
+    tuyaDevicePicker('picker', 'defaultDevices.deviceSlugListString');
+    document.getElementById('testBtn').addEventListener('click', async () => {
+        const result = document.getElementById('testResult');
+        result.textContent = 'Pinging...';
+        const s = await SDPIComponents.streamDeckClient.getSettings();
+        const apiUrl = (s.settings && s.settings.apiUrl) || '';
+        const apiToken = (s.settings && s.settings.apiToken) || '';
+        try {
+            const res = await fetch(apiUrl.replace(/\/$/, '') + '/devices', { headers: { Authorization: apiToken } });
+            if (!res.ok) { result.textContent = 'HTTP ' + res.status; return; }
+            const j = await res.json();
+            const n = (Object.keys(j.switches || {}).length) + (Object.keys(j.lights || {}).length);
+            result.textContent = 'OK - ' + n + ' device(s) reported';
+        } catch (e) {
+            result.textContent = 'Error - ' + e.message;
         }
-    </script>
+    });
+});
+</script>
 </body>
 </html>
