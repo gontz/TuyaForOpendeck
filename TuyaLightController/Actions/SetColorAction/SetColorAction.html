@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name=viewport content="width=device-width,initial-scale=1,maximum-scale=1,minimum-scale=1,user-scalable=no,minimal-ui,viewport-fit=cover">
+    <meta name=apple-mobile-web-app-capable content=yes>
+    <meta name=apple-mobile-web-app-status-bar-style content=black>
+    <title>GoveeLightController Set Color</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/barraider/streamdeck-easypi-v2@latest/src/sdpi.css">
+    <script src="https://cdn.jsdelivr.net/gh/barraider/streamdeck-easypi-v2@latest/src/sdtools.common.js"></script>
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/barraider/streamdeck-easypi-v2@latest/src/rangeTooltip.css">
+    <script src="https://cdn.jsdelivr.net/gh/barraider/streamdeck-easypi-v2@latest/src/rangeTooltip.js"></script>
+
+    <script src="https://sdpi-components.dev/releases/v3/sdpi-components.js"></script>
+</head>
+<body>
+    <div class="sdpi-info-label hidden" style="top: -1000;" value="">Tooltip</div>
+    <div class="sdpi-wrapper">
+        <div class="sdpi-item">
+            <div class="sdpi-item-label">Description</div>
+            <div class="sdpi-item-value">
+                Changes the color for one or more lights specified in the device list below.
+            </div>
+        </div>
+        <br />
+
+        <div type="range" class="sdpi-item sdShowTooltip" id="dvRed">
+            <div class="sdpi-item-label" id="redLabel">Red</div>
+            <div class="sdpi-item-value">
+                <span class="clickable" value="0">0</span>
+                <input type="range" min="0" max="255" value=255 data-suffix="" class="sdProperty" id="colorRed" oninput="setSettings()">
+                <span class="clickable" value="255">255</span>
+                <label for="colorRed" class="rangeLabel"></label>
+            </div>
+        </div>
+        <div type="range" class="sdpi-item sdShowTooltip" id="dvGreen">
+            <div class="sdpi-item-label" id="greenLabel">Green</div>
+            <div class="sdpi-item-value">
+                <span class="clickable" value="0">0</span>
+                <input type="range" min="0" max="255" value=255 data-suffix="" class="sdProperty" id="colorGreen" oninput="setSettings()">
+                <span class="clickable" value="255">255</span>
+                <label for="colorGreen" class="rangeLabel"></label>
+            </div>
+        </div>
+        <div type="range" class="sdpi-item sdShowTooltip" id="dvBlue">
+            <div class="sdpi-item-label" id="blueLabel">Blue</div>
+            <div class="sdpi-item-value">
+                <span class="clickable" value="0">0</span>
+                <input type="range" min="0" max="255" value=255 data-suffix="" class="sdProperty" id="colorBlue" oninput="setSettings()">
+                <span class="clickable" value="255">255</span>
+                <label for="colorBlue" class="rangeLabel"></label>
+            </div>
+        </div>
+
+        <div class="sdpi-item">
+            <div class="sdpi-item-label">Hex Code</div>
+            <sdpi-textfield class="sdpi-item-value sdProperty" setting="hexCodeString" id="hexCodeString"
+                            value="ffffff" maxlength="6" required oninput="setSettings()">
+            </sdpi-textfield>
+        </div>
+
+        <div class="sdpi-item">
+            <div class="sdpi-item-label">Resulting Color</div>
+            <div class="sdpi-item-value" id="resultingColorDiv"></div>
+        </div>
+
+        <div class="sdpi-item">
+            <div class="sdpi-item-label">Icon Style</div>
+            <select class="sdpi-item-value sdProperty" setting="useDynamicIconOption" id="useDynamicIconOption" oninput="setSettings()">
+                <option value="dynamic">Dynamic</option>
+                <option value="static">Static</option>
+            </select>
+        </div>
+        <div class="sdpi-item">
+            <div class="sdpi-item-label">Device Selection</div>
+            <select class="sdpi-item-value sdProperty" setting="useGlobalSettingsOption" id="useGlobalSettingsOption" oninput="setSettings()">
+                <option value="global">From Global Settings</option>
+                <option value="local">From Device IP List</option>
+            </select>
+        </div>
+        <div class="sdpi-item" id="dvDeviceIpList">
+            <div class="sdpi-item-label">Device IP List</div>
+            <sdpi-textarea class="sdpi-item-value sdProperty" setting="deviceIpListString" id="deviceIpListString"
+                           rows="4" oninput="setSettings()"></sdpi-textarea>
+        </div>
+        <div class="sdpi-item" id="dvSelectedIps">
+            <div class="sdpi-item-label">Selected IPs</div>
+            <div class="sdpi-item-value sdProperty sdHTML" style="font-size: 16px;" id="validatedDeviceIpListString"></div>
+        </div>
+        <br />
+        <details style="border: 1px solid #ccc; border-radius: 5px; padding: 3px; background: #3d3d3d; font-size: 10px;">
+            <summary style="font-weight: bold; cursor: pointer;">Feedback and Support</summary>
+            <br />
+            <div>Links to Discord, guides and more can be found on the marketplace site!</div>
+            <button onclick="OpenMarketplaceLink()" style="font-size: 10px; padding: 3px">Marketplace</button>
+            <br />
+            <br />
+            <div>The plugin is free, but development is not. Any contribution or feedback no matter how small is greatly appreciated.</div>
+        </details>
+    </div>
+
+    <script>
+        function OpenMarketplaceLink() {
+            if (websocket && (websocket.readyState === 1)) {
+                const json = {
+                    'event': 'openUrl',
+                    'payload': {
+                        'url': 'https://marketplace.elgato.com/product/govee-light-contoller-29d301d8-e245-497e-97e0-23fb09542bb1'
+                    }
+                };
+                websocket.send(JSON.stringify(json));
+            }
+        }
+
+        // Function to toggle visibility
+        function toggleDeviceIpList() {
+            // Get references to the dropdown and the divs
+            const dropdown = document.getElementById('useGlobalSettingsOption');
+            const deviceIpListDiv = document.getElementById('dvDeviceIpList');
+            const selectedIpsDiv = document.getElementById('dvSelectedIps');
+
+            if (dropdown.value === 'global') {
+                deviceIpListDiv.style.display = 'none'; // Hide the div
+                selectedIpsDiv.style.display = 'none';
+            } else {
+                deviceIpListDiv.style.display = ''; // Show the div
+                selectedIpsDiv.style.display = '';
+            }
+        }
+        // add Event listener that triggers if the device selection is changed
+        const dropdown = document.getElementById('useGlobalSettingsOption');
+        dropdown.addEventListener('change', toggleDeviceIpList);
+
+
+        // Function to change the preview color
+        function changeResultingColorPreview() {
+            const resultingColorDiv = document.getElementById('resultingColorDiv');
+
+            const colorRedInput = document.getElementById('colorRed');
+            const colorGreenInput = document.getElementById('colorGreen');
+            const colorBlueInput = document.getElementById('colorBlue');
+
+            let r = colorRedInput.value;
+            let g = colorGreenInput.value;
+            let b = colorBlueInput.value;
+
+            resultingColorDiv.style.backgroundColor = `rgb(${r}, ${g}, ${b})`; 
+            
+        }
+
+        // add event listener that triggers when a message is recieved (this is called when the Property inspector is opened)
+        document.addEventListener('websocketCreate', function () {
+
+            // add event listener that triggers when a message from the stream deck was received (e.g. settings)
+            websocket.addEventListener('message', function (event) {
+                toggleDeviceIpList();
+                changeResultingColorPreview();
+            });
+
+        });
+
+    </script>
+</body>
+</html>

@@ -1,0 +1,250 @@
+{
+  "Actions": [
+    {
+      "Icon": "Actions/GlobalSettingsAction/SettingIcon",
+      "Name": "Global Settings",
+      "States": [
+        {
+          "Image": "Actions/GlobalSettingsAction/Setting",
+          "TitleAlignment": "middle",
+          "FontSize": "12"
+        }
+      ],
+      "SupportedInMultiActions": false,
+      "Tooltip": "Change the settings for all plugin actions",
+      "UUID": "com.gontz.tuyalightcontroller.globalsettingsaction",
+      "PropertyInspectorPath": "Actions/GlobalSettingsAction/GlobalSettingsAction.html"
+    },
+    {
+      "Icon": "Actions/TurnOnOffAction/OnOffIcon",
+      "Name": "Turn On/Off",
+      "States": [
+        {
+          "Image": "Actions/TurnOnOffAction/LightbulbOn",
+          "TitleAlignment": "middle",
+          "FontSize": "12"
+        },
+        {
+          "Image": "Actions/TurnOnOffAction/LightbulbOff",
+          "TitleAlignment": "middle",
+          "FontSize": "12"
+        }
+      ],
+      "DisableAutomaticStates": true,
+      "SupportedInMultiActions": true,
+      "Tooltip": "Turn on or off one or more lights",
+      "UUID": "com.gontz.tuyalightcontroller.turnonoffaction",
+      "PropertyInspectorPath": "Actions/TurnOnOffAction/TurnOnOffAction.html"
+    },
+    {
+      "Icon": "Actions/SetColorAction/ColorIcon",
+      "Name": "Change Color",
+      "States": [
+        {
+          "Image": "Actions/SetColorAction/LightbulbColor",
+          "TitleAlignment": "middle",
+          "FontSize": "12"
+        }
+      ],
+      "SupportedInMultiActions": true,
+      "Tooltip": "Changes the color of one or more lights",
+      "UUID": "com.gontz.tuyalightcontroller.setcoloraction",
+      "PropertyInspectorPath": "Actions/SetColorAction/SetColorAction.html"
+    },
+    {
+      "Icon": "Actions/SetColorAction/ColorIcon",
+      "Name": "Color Control",
+      "States": [
+        {
+          "Image": "Actions/SetColorAction/ColorIcon",
+          "TitleAlignment": "middle",
+          "FontSize": "13"
+        }
+      ],
+      "Controllers": [ "Encoder" ],
+      "Encoder": {
+        "layout": "Actions/SetColorAction/colorDialLayout.json",
+        "TriggerDescription": {
+          "Rotate": "Increase/Decrease",
+          "Push": "Increase Rotate Stepsize",
+          "Touch": "Set Current Color"
+        }
+      },
+      "SupportedInMultiActions": false,
+      "DisableCaching": true,
+      "UserTitleEnabled": true,
+      "Tooltip": "A dial action that scrolls through colors",
+      "UUID": "com.gontz.tuyalightcontroller.setcolordialaction",
+      "PropertyInspectorPath": "Actions/SetColorAction/SetColorDialAction.html"
+    },
+    {
+      "Icon": "Actions/SetTemperatureAction/TemperatureIcon",
+      "Name": "Set Temperature",
+      "States": [
+        {
+          "Image": "Actions/SetTemperatureAction/LightbulbTemperature",
+          "TitleAlignment": "middle",
+          "FontSize": "12"
+        }
+      ],
+      "SupportedInMultiActions": true,
+      "Tooltip": "Changes the color based on a temperature value of one or more lights",
+      "UUID": "com.gontz.tuyalightcontroller.settemperatureaction",
+      "PropertyInspectorPath": "Actions/SetTemperatureAction/SetTemperatureAction.html"
+    },
+    {
+      "Icon": "Actions/SetTemperatureAction/TemperatureIcon",
+      "Name": "Temperature Control",
+      "States": [
+        {
+          "Image": "Actions/SetTemperatureAction/TemperatureIcon",
+          "TitleAlignment": "middle",
+          "FontSize": "13"
+        }
+      ],
+      "Controllers": [ "Encoder" ],
+      "Encoder": {
+        "layout": "Actions/SetTemperatureAction/temperatureDialLayout.json",
+        "TriggerDescription": {
+          "Rotate": "Increase/Decrease",
+          "Push": "Increase Rotate Stepsize",
+          "Touch": "Set Current Temperature"
+        }
+      },
+      "SupportedInMultiActions": false,
+      "DisableCaching": true,
+      "UserTitleEnabled": true,
+      "Tooltip": "A dial action that changes the color based on a temperature value",
+      "UUID": "com.gontz.tuyalightcontroller.settemperaturedialaction",
+      "PropertyInspectorPath": "Actions/SetTemperatureAction/SetTemperatureDialAction.html"
+    }, 
+    {
+      "Icon": "Actions/SetBrightnessAction/BrightnessIcon",
+      "Name": "Change Brightness",
+      "States": [
+        {
+          "Image": "Actions/SetBrightnessAction/LightbulbBrightness",
+          "TitleAlignment": "middle",
+          "FontSize": "12"
+        }
+      ],
+      "SupportedInMultiActions": true,
+      "Tooltip": "Changes the brightness of one or more lights",
+      "UUID": "com.gontz.tuyalightcontroller.setbrightnessaction",
+      "PropertyInspectorPath": "Actions/SetBrightnessAction/SetBrightnessAction.html"
+    },
+    {
+      "Icon": "Actions/SetBrightnessAction/BrightnessIcon",
+      "Name": "Brightness Control",
+      "States": [
+        {
+          "Image": "Actions/SetBrightnessAction/BrightnessIcon",
+          "TitleAlignment": "middle",
+          "FontSize": "13"
+        }
+      ],
+      "Controllers": [ "Encoder" ],
+      "Encoder": {
+        "layout": "Actions/SetBrightnessAction/brightnessDialLayout.json",
+        "TriggerDescription": {
+          "Rotate": "Increase/Decrease",
+          "Push": "Increase Rotate Stepsize",
+          "Touch": "Set Current Brightness"
+        }
+      },
+      "SupportedInMultiActions": false,
+      "DisableCaching": true,
+      "UserTitleEnabled": true,
+      "Tooltip": "A dial action that adjusts the brightness",
+      "UUID": "com.gontz.tuyalightcontroller.setbrightnessdialaction",
+      "PropertyInspectorPath": "Actions/SetBrightnessAction/SetBrightnessDialAction.html"
+    },
+    {
+      "Icon": "Actions/ScriptAction/CodeIcon",
+      "Name": "Script Action",
+      "States": [
+        {
+          "Image": "Actions/ScriptAction/LightbulbCode",
+          "TitleAlignment": "middle",
+          "FontSize": "12"
+        },
+        {
+          "Image": "Actions/ScriptAction/LightbulbCodeGreen",
+          "TitleAlignment": "middle",
+          "FontSize": "12"
+        }
+      ],
+      "DisableAutomaticStates": true,
+      "SupportedInMultiActions": true,
+      "Tooltip": "Executes a Script for Govee lights",
+      "UUID": "com.gontz.tuyalightcontroller.scriptaction",
+      "PropertyInspectorPath": "Actions/ScriptAction/ScriptAction.html"
+    },
+    {
+      "Icon": "Actions/LeagueEffectsAction/LeagueIcon",
+      "Name": "League Of Legends Game Effects",
+      "States": [
+        {
+          "Image": "Actions/LeagueEffectsAction/League",
+          "TitleAlignment": "middle",
+          "ShowTitle": true,
+          "FontSize": "12"
+        },
+        {
+          "Image": "Actions/LeagueEffectsAction/LeagueRunning",
+          "TitleAlignment": "middle",
+          "ShowTitle": true,
+          "FontSize": "12"
+        }
+      ],
+      "DisableAutomaticStates": true,
+      "SupportedInMultiActions": true,
+      "Tooltip": "Provides you with a light show when you play League of Legends",
+      "UUID": "com.gontz.tuyalightcontroller.leagueeffectsaction",
+      "PropertyInspectorPath": "Actions/LeagueEffectsAction/LeagueEffectsAction.html"
+    },
+    {
+      "Icon": "Actions/CounterStrikeEffectsAction/CounterStrikeIcon",
+      "Name": "Counter Strike Game Effects",
+      "States": [
+        {
+          "Image": "Actions/CounterStrikeEffectsAction/CounterStrike",
+          "TitleAlignment": "middle",
+          "ShowTitle": true,
+          "FontSize": "12"
+        },
+        {
+          "Image": "Actions/CounterStrikeEffectsAction/CounterStrikeRunning",
+          "TitleAlignment": "middle",
+          "ShowTitle": true,
+          "FontSize": "12"
+        }
+      ],
+      "DisableAutomaticStates": true,
+      "SupportedInMultiActions": true,
+      "Tooltip": "Provides you with a light show when you play Counter Strike",
+      "UUID": "com.gontz.tuyalightcontroller.counterstrikeeffectssaction",
+      "PropertyInspectorPath": "Actions/CounterStrikeEffectsAction/CounterStrikeEffectsAction.html"
+    }
+  ],
+  "Author": "gontz",
+  "Name": "Tuya Light Controller",
+  "Description": "Control Tuya devices via the local smart-room HTTP API.",
+  "Icon": "Images/LightbulbGovee",
+  "URL": "https://github.com/gontz/TuyaLightController",
+  "Version": "1.2.1",
+  "CodePath": "TuyaLightController",
+  "Category": "Tuya Light Controller",
+  "CategoryIcon": "Images/LightbulbGoveeIcon",
+  "OS": [
+    {
+      "Platform": "windows",
+      "MinimumVersion": "10"
+    }
+  ],
+  "SDKVersion": 2,
+  "Software": {
+    "MinimumVersion": "6.4"
+  },
+  "UUID": "com.gontz.tuyalightcontroller"
+}
