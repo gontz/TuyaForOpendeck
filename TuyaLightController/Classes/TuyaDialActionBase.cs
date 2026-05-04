@@ -1,0 +1,65 @@
+using BarRaider.SdTools;
+using BarRaider.SdTools.Events;
+using BarRaider.SdTools.Payloads;
+using BarRaider.SdTools.Wrappers;
+using Newtonsoft.Json.Linq;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+
+namespace TuyaLightController {
+    /// <summary>
+    /// Base for encoder actions. Same global-settings plumbing as TuyaActionBase.
+    /// </summary>
+    public abstract class TuyaDialActionBase<TSettings> : EncoderBase
+        where TSettings : class, new()
+    {
+        protected readonly TSettings localSettings;
+        protected GlobalSettings globalSettings = new GlobalSettings();
+
+        protected TuyaDialActionBase(SDConnection connection, InitialPayload payload)
+            : base(connection, payload)
+        {
+            if (payload.Settings == null || payload.Settings.Count == 0) {
+                this.localSettings = new TSettings();
+                SaveLocalSettings().GetAwaiter().GetResult();
+            }
+            else {
+                this.localSettings = payload.Settings.ToObject<TSettings>();
+            }
+            GlobalSettingsManager.Instance.RequestGlobalSettings();
+            Connection.OnPropertyInspectorDidAppear += OnPropertyInspectorOpened;
+        }
+
+        public override void Dispose() {
+            Connection.OnPropertyInspectorDidAppear -= OnPropertyInspectorOpened;
+        }
+
+        public override void OnTick() { }
+
+        public override void ReceivedSettings(ReceivedSettingsPayload payload) {
+            Tools.AutoPopulateSettings(localSettings, payload.Settings);
+            SaveLocalSettings();
+        }
+
+        public override void ReceivedGlobalSettings(ReceivedGlobalSettingsPayload payload) {
+            globalSettings = payload.Settings.ToObject<GlobalSettings>() ?? new GlobalSettings();
+            TuyaApiClient.CurrentSettings = globalSettings;
+        }
+
+        protected List<string> ResolveSlugs(DeviceSlugSettings perAction) {
+            if (perAction == null) return globalSettings?.DefaultDevices?.DeviceSlugList ?? new List<string>();
+            return perAction.UseGlobalSettings
+                ? globalSettings?.DefaultDevices?.DeviceSlugList ?? new List<string>()
+                : perAction.DeviceSlugList;
+        }
+
+        protected Task SaveLocalSettings() =>
+            Connection.SetSettingsAsync(JObject.FromObject(localSettings));
+
+        private void OnPropertyInspectorOpened(object sender,
+            SDEventReceivedEventArgs<PropertyInspectorDidAppear> e)
+        {
+            Connection.SetSettingsAsync(JObject.FromObject(localSettings));
+        }
+    }
+}

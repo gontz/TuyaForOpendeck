@@ -105,6 +105,8 @@
     <Compile Include="Classes\DeviceSlugSettings.cs" />
     <Compile Include="Classes\GlobalSettings.cs" />
     <Compile Include="Classes\TuyaApiClient.cs" />
+    <Compile Include="Classes\TuyaActionBase.cs" />
+    <Compile Include="Classes\TuyaDialActionBase.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Actions\SetTemperatureAction\temperatureDialLayout.json">
