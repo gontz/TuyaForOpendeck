@@ -86,9 +86,6 @@
     </Compile>
     <Compile Include="Actions\SetColorAction\SetColorActionSettings.cs" />
     <Compile Include="Actions\SetColorAction\SetColorDialActionSettings.cs" />
-    <Compile Include="Classes\GoveeDevice.cs" />
-    <Compile Include="Classes\GoveeDeviceController.cs" />
-    <Compile Include="Classes\DeviceListSettings.cs" />
     <Compile Include="Actions\GlobalSettingsAction\GlobalSettingsAction.cs">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Compile>
@@ -103,7 +100,6 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Compile>
     <Compile Include="Classes\Program.cs" />
-    <Compile Include="Classes\RaceTimer.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
