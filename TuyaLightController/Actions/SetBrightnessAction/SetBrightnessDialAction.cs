@@ -1,118 +1,67 @@
-using BarRaider.SdTools.Events;
-using BarRaider.SdTools.Wrappers;
 using BarRaider.SdTools;
-using Newtonsoft.Json.Linq;
-using System.Collections.Generic;
-using System.Threading.Tasks;
 using BarRaider.SdTools.Payloads;
+using BarRaider.SdTools.Wrappers;
+using Newtonsoft.Json;
+using System.Collections.Generic;
 
 namespace TuyaLightController {
     [PluginActionId("com.gontz.tuyalightcontroller.setbrightnessdialaction")]
+    public class SetBrightnessDialAction : TuyaDialActionBase<SetBrightnessDialAction.Settings> {
+        public class Settings {
+            [JsonProperty(PropertyName = "devices")]
+            public DeviceSlugSettings Devices { get; set; } = new DeviceSlugSettings();
 
-    public class SetBrightnessDialAction : EncoderBase {
-        /*
-         * This class represents an action on the Stream Deck.
-         * The Action sets the brightsness of the lights
-         */
+            [JsonProperty(PropertyName = "brightness")]
+            public int Brightness { get; set; } = 50;
 
-        private readonly SetBrightnessSettings localSettings;
-        private readonly DeviceListSettings globalSettings;
+            [JsonProperty(PropertyName = "stepIndex")]
+            public int StepIndex { get; set; } = 0;
+        }
 
-        // to distinguish between a dial press and a "rotate press"
-        private bool dialWasRotated = false;
+        private static readonly int[] StepSizes = { 1, 5, 10 };
 
-        public SetBrightnessDialAction(SDConnection connection, InitialPayload payload) : base(connection, payload) {
-            if(payload.Settings == null || payload.Settings.Count == 0) {
-                this.localSettings = new SetBrightnessSettings();
-                SaveSettings();
+        public SetBrightnessDialAction(SDConnection connection, InitialPayload payload)
+            : base(connection, payload)
+        {
+            UpdateDialDisplay();
+        }
+
+        public override async void DialRotate(DialRotatePayload payload) {
+            int step = StepSizes[((localSettings.StepIndex % StepSizes.Length) + StepSizes.Length) % StepSizes.Length];
+            int v = localSettings.Brightness + payload.Ticks * step;
+            v = v < 0 ? 0 : (v > 100 ? 100 : v);
+            localSettings.Brightness = v;
+            await SaveLocalSettings();
+            UpdateDialDisplay();
+
+            var slugs = ResolveSlugs(localSettings.Devices);
+            if (slugs.Count > 0) {
+                await TuyaApiClient.SetBrightness(slugs, v);
             }
-            else {
-                this.localSettings = payload.Settings.ToObject<SetBrightnessSettings>();
-            }
-            this.globalSettings = new DeviceListSettings();
-            GlobalSettingsManager.Instance.RequestGlobalSettings();
-            Connection.OnPropertyInspectorDidAppear += OnPropertyInspectorOpened;
+        }
 
-            Dictionary<string, string> dkv = new Dictionary<string, string> {
+        public override async void DialUp(DialPayload payload) {
+            localSettings.StepIndex = (localSettings.StepIndex + 1) % StepSizes.Length;
+            await SaveLocalSettings();
+            UpdateDialDisplay();
+        }
+
+        public override void DialDown(DialPayload payload) { }
+
+        public override async void TouchPress(TouchpadPressPayload payload) {
+            var slugs = ResolveSlugs(localSettings.Devices);
+            if (slugs.Count == 0) return;
+            await TuyaApiClient.SetBrightness(slugs, localSettings.Brightness);
+        }
+
+        private async void UpdateDialDisplay() {
+            int step = StepSizes[((localSettings.StepIndex % StepSizes.Length) + StepSizes.Length) % StepSizes.Length];
+            var feedback = new Dictionary<string, string> {
                 ["value"] = localSettings.Brightness + "%",
-                ["indicator"] = localSettings.Brightness.ToString()
+                ["indicator"] = localSettings.Brightness.ToString(),
+                ["title"] = "Brightness (±" + step + ")"
             };
-            Connection.SetFeedbackAsync(dkv);
+            await Connection.SetFeedbackAsync(feedback);
         }
-
-        public override void Dispose() {
-            Connection.OnPropertyInspectorDidAppear -= OnPropertyInspectorOpened;
-        }
-
-        public async override void DialRotate(DialRotatePayload payload) {
-            dialWasRotated = true;
-            int stepSize = payload.IsDialPressed ? 5 : 1;
-
-            localSettings.Brightness += payload.Ticks * stepSize;
-            if(localSettings.Brightness < 0)
-                localSettings.Brightness = 0;
-            if(localSettings.Brightness > 100)
-                localSettings.Brightness = 100;
-
-            await SaveSettings();
-
-            Dictionary<string, string> dkv = new Dictionary<string, string> {
-                ["value"] = localSettings.Brightness + "%",
-                ["indicator"] = localSettings.Brightness.ToString()
-            };
-            await Connection.SetFeedbackAsync(dkv);
-
-            SetBrightness();
-        }
-
-        public override void DialDown(DialPayload payload) {
-            dialWasRotated = false;
-        }
-
-        public override void DialUp(DialPayload payload) {
-            if(dialWasRotated)
-                return;
-
-            SetBrightness();
-        }
-
-        public override void TouchPress(TouchpadPressPayload payload) {
-            SetBrightness();
-        }
-
-
-        public override void OnTick() { }
-
-        public override void ReceivedSettings(ReceivedSettingsPayload payload) {
-            Tools.AutoPopulateSettings(localSettings, payload.Settings);
-            SaveSettings();
-        }
-
-        public override void ReceivedGlobalSettings(ReceivedGlobalSettingsPayload payload) {
-            Tools.AutoPopulateSettings(globalSettings, payload.Settings);
-        }
-
-        #region Private Methods
-
-        private Task SaveSettings() {
-            return Connection.SetSettingsAsync(JObject.FromObject(localSettings));
-        }
-
-        private void OnPropertyInspectorOpened(object sender, SDEventReceivedEventArgs<PropertyInspectorDidAppear> e) {
-            Connection.SetSettingsAsync(JObject.FromObject(localSettings));
-        }
-
-        private void SetBrightness() {
-            if(localSettings.UseGlobalSettings) {
-                GoveeDeviceController.Instance.SetBrightness(localSettings.Brightness, globalSettings.DeviceIpList);
-            }
-            else {
-                GoveeDeviceController.Instance.SetBrightness(localSettings.Brightness, localSettings.DeviceIpList);
-            }
-        }
-        
-
-        #endregion
     }
 }
-

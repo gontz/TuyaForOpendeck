@@ -1,120 +1,67 @@
-using BarRaider.SdTools.Events;
-using BarRaider.SdTools.Wrappers;
 using BarRaider.SdTools;
-using Newtonsoft.Json.Linq;
-using System.Collections.Generic;
-using System.Threading.Tasks;
 using BarRaider.SdTools.Payloads;
+using BarRaider.SdTools.Wrappers;
+using Newtonsoft.Json;
+using System.Collections.Generic;
 
 namespace TuyaLightController {
     [PluginActionId("com.gontz.tuyalightcontroller.settemperaturedialaction")]
+    public class SetTemperatureDialAction : TuyaDialActionBase<SetTemperatureDialAction.Settings> {
+        public class Settings {
+            [JsonProperty(PropertyName = "devices")]
+            public DeviceSlugSettings Devices { get; set; } = new DeviceSlugSettings();
 
-    public class SetTemperatureDialAction : EncoderBase {
-        /*
-         * This class represents an action on the Stream Deck.
-         * The Action sets the brightsness of the lights
-         */
+            [JsonProperty(PropertyName = "warmth")]
+            public int Warmth { get; set; } = 50;
 
-        private readonly SetTemperatureSettings localSettings;
-        private readonly DeviceListSettings globalSettings;
+            [JsonProperty(PropertyName = "stepIndex")]
+            public int StepIndex { get; set; } = 0;
+        }
 
-        // to distinguish between a dial press and a "rotate press"
-        private bool dialWasRotated = false;
+        private static readonly int[] StepSizes = { 1, 5, 10 };
 
-        public SetTemperatureDialAction(SDConnection connection, InitialPayload payload) : base(connection, payload) {
-            if(payload.Settings == null || payload.Settings.Count == 0) {
-                this.localSettings = new SetTemperatureSettings();
-                SaveSettings();
+        public SetTemperatureDialAction(SDConnection connection, InitialPayload payload)
+            : base(connection, payload)
+        {
+            UpdateDialDisplay();
+        }
+
+        public override async void DialRotate(DialRotatePayload payload) {
+            int step = StepSizes[((localSettings.StepIndex % StepSizes.Length) + StepSizes.Length) % StepSizes.Length];
+            int v = localSettings.Warmth + payload.Ticks * step;
+            v = v < 0 ? 0 : (v > 100 ? 100 : v);
+            localSettings.Warmth = v;
+            await SaveLocalSettings();
+            UpdateDialDisplay();
+
+            var slugs = ResolveSlugs(localSettings.Devices);
+            if (slugs.Count > 0) {
+                await TuyaApiClient.SetTemperature(slugs, v);
             }
-            else {
-                this.localSettings = payload.Settings.ToObject<SetTemperatureSettings>();
-            }
-            this.globalSettings = new DeviceListSettings();
-            GlobalSettingsManager.Instance.RequestGlobalSettings();
-            Connection.OnPropertyInspectorDidAppear += OnPropertyInspectorOpened;
+        }
 
-            int normalizedTemperature = (localSettings.Temperature - 2000) / 70; // normalizong the temperature to a value between 0 and 100, as the normal range from 2000 to 9000 breaks the layout
-            Dictionary<string, string> dkv = new Dictionary<string, string> {
-                ["value"] = localSettings.Temperature + "K",
-                ["indicator"] = normalizedTemperature.ToString()
+        public override async void DialUp(DialPayload payload) {
+            localSettings.StepIndex = (localSettings.StepIndex + 1) % StepSizes.Length;
+            await SaveLocalSettings();
+            UpdateDialDisplay();
+        }
+
+        public override void DialDown(DialPayload payload) { }
+
+        public override async void TouchPress(TouchpadPressPayload payload) {
+            var slugs = ResolveSlugs(localSettings.Devices);
+            if (slugs.Count == 0) return;
+            await TuyaApiClient.SetTemperature(slugs, localSettings.Warmth);
+        }
+
+        private async void UpdateDialDisplay() {
+            int step = StepSizes[((localSettings.StepIndex % StepSizes.Length) + StepSizes.Length) % StepSizes.Length];
+            var feedback = new Dictionary<string, string> {
+                ["value"] = localSettings.Warmth + "%",
+                ["indicator"] = localSettings.Warmth.ToString(),
+                ["title"] = "Warmth (±" + step + ")"
             };
-            Connection.SetFeedbackAsync(dkv);
+            await Connection.SetFeedbackAsync(feedback);
         }
-
-        public override void Dispose() {
-            Connection.OnPropertyInspectorDidAppear -= OnPropertyInspectorOpened;
-        }
-
-        public async override void DialRotate(DialRotatePayload payload) {
-            dialWasRotated = true;
-            int stepSize = payload.IsDialPressed ? 100 : 10;
-
-            localSettings.Temperature += payload.Ticks * stepSize;
-            if(localSettings.Temperature < 2000)
-                localSettings.Temperature = 2000;
-            if(localSettings.Temperature > 9000)
-                localSettings.Temperature = 9000;
-
-            await SaveSettings();
-
-            int normalizedTemperature = (localSettings.Temperature - 2000) / 70; // normalizong the temperature to a value between 0 and 100, as the normal range from 2000 to 9000 breaks the layout
-            Dictionary<string, string> dkv = new Dictionary<string, string> {
-                ["value"] = localSettings.Temperature + "K",
-                ["indicator"] = normalizedTemperature.ToString()
-            };
-            await Connection.SetFeedbackAsync(dkv);
-
-            SetTemperature();
-        }
-
-        public override void DialDown(DialPayload payload) {
-            dialWasRotated = false;
-        }
-
-        public override void DialUp(DialPayload payload) {
-            if(dialWasRotated)
-                return;
-
-            SetTemperature();
-        }
-
-        public override void TouchPress(TouchpadPressPayload payload) {
-            SetTemperature();
-        }
-
-
-        public override void OnTick() { }
-
-        public override void ReceivedSettings(ReceivedSettingsPayload payload) {
-            Tools.AutoPopulateSettings(localSettings, payload.Settings);
-            SaveSettings();
-        }
-
-        public override void ReceivedGlobalSettings(ReceivedGlobalSettingsPayload payload) {
-            Tools.AutoPopulateSettings(globalSettings, payload.Settings);
-        }
-
-        #region Private Methods
-
-        private Task SaveSettings() {
-            return Connection.SetSettingsAsync(JObject.FromObject(localSettings));
-        }
-
-        private void OnPropertyInspectorOpened(object sender, SDEventReceivedEventArgs<PropertyInspectorDidAppear> e) {
-            Connection.SetSettingsAsync(JObject.FromObject(localSettings));
-        }
-
-        private void SetTemperature() {
-            if(localSettings.UseGlobalSettings) {
-                GoveeDeviceController.Instance.SetTemperature(localSettings.Temperature, globalSettings.DeviceIpList);
-            }
-            else {
-                GoveeDeviceController.Instance.SetTemperature(localSettings.Temperature, localSettings.DeviceIpList);
-            }
-        }
-        
-
-        #endregion
     }
 }
-

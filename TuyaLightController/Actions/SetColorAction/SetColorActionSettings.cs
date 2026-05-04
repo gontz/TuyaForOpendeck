@@ -1,44 +1,17 @@
 using Newtonsoft.Json;
-using System.Text.RegularExpressions;
 
 namespace TuyaLightController {
-    public class SetColorActionSettings : DeviceListSettings {
+    public class SetColorActionSettings {
+        [JsonProperty(PropertyName = "devices")]
+        public DeviceSlugSettings Devices { get; set; } = new DeviceSlugSettings();
 
-        [JsonProperty(PropertyName = "useDynamicIconOption")]
-        public string UseDynamicIconOption { get; set; }
-        public bool UseDynamicIcon {
-            get => UseDynamicIconOption == "dynamic";
-        }
+        [JsonProperty(PropertyName = "hue")]
+        public int Hue { get; set; } = 0;
 
-        [JsonProperty(PropertyName = "colorRed")]
-        public int ColorRed { get; set; }
-        [JsonProperty(PropertyName = "colorGreen")]
-        public int ColorGreen { get; set; }
-        [JsonProperty(PropertyName = "colorBlue")]
-        public int ColorBlue { get; set; }
+        [JsonProperty(PropertyName = "saturation")]
+        public int Saturation { get; set; } = 100;
 
-
-        private string hexCodeString;
-        [JsonProperty(PropertyName = "hexCodeString")]
-        public string HexCodeString {
-            get => hexCodeString;
-            set {
-                string modifiedHexCode = value.Trim().ToLower();
-                modifiedHexCode = Regex.Replace(modifiedHexCode, "[^0-9a-f]", "");
-
-                hexCodeString = modifiedHexCode;
-            }
-        }
-
-        public SetColorActionSettings() : base() {
-            UseDynamicIconOption = "dynamic";
-
-            ColorRed = 255;
-            ColorGreen = 255;
-            ColorBlue = 255;
-
-            hexCodeString = "ffffff";
-        }
+        [JsonProperty(PropertyName = "value")]
+        public int Value { get; set; } = 100;
     }
 }
-
