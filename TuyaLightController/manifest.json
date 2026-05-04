@@ -61,7 +61,9 @@
           "FontSize": "13"
         }
       ],
-      "Controllers": [ "Encoder" ],
+      "Controllers": [
+        "Encoder"
+      ],
       "Encoder": {
         "layout": "Actions/SetColorAction/colorDialLayout.json",
         "TriggerDescription": {
@@ -102,7 +104,9 @@
           "FontSize": "13"
         }
       ],
-      "Controllers": [ "Encoder" ],
+      "Controllers": [
+        "Encoder"
+      ],
       "Encoder": {
         "layout": "Actions/SetTemperatureAction/temperatureDialLayout.json",
         "TriggerDescription": {
@@ -117,7 +121,7 @@
       "Tooltip": "A dial action that changes the color based on a temperature value",
       "UUID": "com.gontz.tuyalightcontroller.settemperaturedialaction",
       "PropertyInspectorPath": "Actions/SetTemperatureAction/SetTemperatureDialAction.html"
-    }, 
+    },
     {
       "Icon": "Actions/SetBrightnessAction/BrightnessIcon",
       "Name": "Change Brightness",
@@ -143,7 +147,9 @@
           "FontSize": "13"
         }
       ],
-      "Controllers": [ "Encoder" ],
+      "Controllers": [
+        "Encoder"
+      ],
       "Encoder": {
         "layout": "Actions/SetBrightnessAction/brightnessDialLayout.json",
         "TriggerDescription": {
@@ -158,73 +164,6 @@
       "Tooltip": "A dial action that adjusts the brightness",
       "UUID": "com.gontz.tuyalightcontroller.setbrightnessdialaction",
       "PropertyInspectorPath": "Actions/SetBrightnessAction/SetBrightnessDialAction.html"
-    },
-    {
-      "Icon": "Actions/ScriptAction/CodeIcon",
-      "Name": "Script Action",
-      "States": [
-        {
-          "Image": "Actions/ScriptAction/LightbulbCode",
-          "TitleAlignment": "middle",
-          "FontSize": "12"
-        },
-        {
-          "Image": "Actions/ScriptAction/LightbulbCodeGreen",
-          "TitleAlignment": "middle",
-          "FontSize": "12"
-        }
-      ],
-      "DisableAutomaticStates": true,
-      "SupportedInMultiActions": true,
-      "Tooltip": "Executes a Script for Govee lights",
-      "UUID": "com.gontz.tuyalightcontroller.scriptaction",
-      "PropertyInspectorPath": "Actions/ScriptAction/ScriptAction.html"
-    },
-    {
-      "Icon": "Actions/LeagueEffectsAction/LeagueIcon",
-      "Name": "League Of Legends Game Effects",
-      "States": [
-        {
-          "Image": "Actions/LeagueEffectsAction/League",
-          "TitleAlignment": "middle",
-          "ShowTitle": true,
-          "FontSize": "12"
-        },
-        {
-          "Image": "Actions/LeagueEffectsAction/LeagueRunning",
-          "TitleAlignment": "middle",
-          "ShowTitle": true,
-          "FontSize": "12"
-        }
-      ],
-      "DisableAutomaticStates": true,
-      "SupportedInMultiActions": true,
-      "Tooltip": "Provides you with a light show when you play League of Legends",
-      "UUID": "com.gontz.tuyalightcontroller.leagueeffectsaction",
-      "PropertyInspectorPath": "Actions/LeagueEffectsAction/LeagueEffectsAction.html"
-    },
-    {
-      "Icon": "Actions/CounterStrikeEffectsAction/CounterStrikeIcon",
-      "Name": "Counter Strike Game Effects",
-      "States": [
-        {
-          "Image": "Actions/CounterStrikeEffectsAction/CounterStrike",
-          "TitleAlignment": "middle",
-          "ShowTitle": true,
-          "FontSize": "12"
-        },
-        {
-          "Image": "Actions/CounterStrikeEffectsAction/CounterStrikeRunning",
-          "TitleAlignment": "middle",
-          "ShowTitle": true,
-          "FontSize": "12"
-        }
-      ],
-      "DisableAutomaticStates": true,
-      "SupportedInMultiActions": true,
-      "Tooltip": "Provides you with a light show when you play Counter Strike",
-      "UUID": "com.gontz.tuyalightcontroller.counterstrikeeffectssaction",
-      "PropertyInspectorPath": "Actions/CounterStrikeEffectsAction/CounterStrikeEffectsAction.html"
     }
   ],
   "Author": "gontz",
