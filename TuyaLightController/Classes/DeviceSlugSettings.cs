@@ -29,6 +29,7 @@ namespace TuyaLightController {
             set { }
         }
 
+        [JsonIgnore]
         public List<string> DeviceSlugList { get; private set; } = new List<string>();
 
         [JsonProperty(PropertyName = "useGlobalSettingsOption")]
@@ -40,6 +41,10 @@ namespace TuyaLightController {
         public DeviceSlugSettings() {
             _deviceSlugListString = "";
             UseGlobalSettingsOption = "global";
+        }
+
+        public void Normalize() {
+            UpdateSlugList(_deviceSlugListString);
         }
 
         public static bool IsValidSlug(string slug) =>

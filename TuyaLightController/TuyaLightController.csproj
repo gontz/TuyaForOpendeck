@@ -75,6 +75,12 @@
     <Compile Include="Actions\SetTemperatureAction\SetTemperatureSettings.cs">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Compile>
+    <Compile Include="Actions\SceneAction\SceneAction.cs">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Compile>
+    <Compile Include="Actions\SceneAction\SceneSettings.cs">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Compile>
     <Compile Include="Actions\SetBrightnessAction\SetBrightnessDialAction.cs">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Compile>
@@ -108,6 +114,7 @@
     <Compile Include="Classes\TuyaActionBase.cs" />
     <Compile Include="Classes\TuyaDialActionBase.cs" />
     <Compile Include="Actions\TurnOnOffAction\TurnOnOffSettings.cs" />
+    <Compile Include="Classes\SettingsCache.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Actions\SetTemperatureAction\temperatureDialLayout.json">
@@ -136,6 +143,27 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Include="Actions\GlobalSettingsAction\Setting.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Actions\SceneAction\SceneAction.html">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Actions\SceneAction\SceneIcon%402x.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Actions\SceneAction\SceneIcon.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Actions\SceneAction\SceneOff%402x.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Actions\SceneAction\SceneOff.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Actions\SceneAction\SceneOn%402x.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Actions\SceneAction\SceneOn.png">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Include="Actions\GlobalSettingsAction\SettingIcon%402x.png">

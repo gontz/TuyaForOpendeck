@@ -11,10 +11,10 @@
 <body>
 <div class="sdpi-wrapper">
     <sdpi-item label="API URL">
-        <sdpi-textfield setting="apiUrl" placeholder="http://localhost:5000"></sdpi-textfield>
+        <sdpi-textfield id="apiUrlField" setting="apiUrl" placeholder="http://localhost:5000"></sdpi-textfield>
     </sdpi-item>
     <sdpi-item label="API Token">
-        <sdpi-password setting="apiToken" placeholder="Authorization header, raw"></sdpi-password>
+        <sdpi-password id="apiTokenField" setting="apiToken" placeholder="Authorization header, raw"></sdpi-password>
     </sdpi-item>
     <sdpi-item label="Default Devices">
         <div id="picker" style="width: 100%"></div>
@@ -28,19 +28,51 @@
 </div>
 <script>
 window.addEventListener('load', () => {
-    tuyaDevicePicker('picker', 'defaultDevices.deviceSlugListString');
+    const STORAGE_KEY = 'tuyaPluginGlobalSettings';
+
+    const persistGlobalLocally = async () => {
+        const s = await SDPIComponents.streamDeckClient.getSettings();
+        const settings = (s && s.settings) ? s.settings : s;
+        const payload = {
+            apiUrl: (settings && settings.apiUrl) || '',
+            apiToken: (settings && settings.apiToken) || ''
+        };
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+    };
+
+    const refreshPicker = async () => {
+        await persistGlobalLocally();
+        tuyaDevicePicker('picker', 'defaultDevices.deviceSlugListString', {
+            preferLocal: true,
+            apiUrlPath: 'apiUrl',
+            apiTokenPath: 'apiToken'
+        });
+    };
+
+    refreshPicker();
+
+    for (const id of ['apiUrlField', 'apiTokenField']) {
+        const el = document.getElementById(id);
+        if (!el) continue;
+        el.addEventListener('change', () => setTimeout(refreshPicker, 150));
+        el.addEventListener('blur', () => setTimeout(refreshPicker, 150), true);
+    }
+
     document.getElementById('testBtn').addEventListener('click', async () => {
         const result = document.getElementById('testResult');
         result.textContent = 'Pinging...';
         const s = await SDPIComponents.streamDeckClient.getSettings();
-        const apiUrl = (s.settings && s.settings.apiUrl) || '';
-        const apiToken = (s.settings && s.settings.apiToken) || '';
+        const settings = (s && s.settings) ? s.settings : s;
+        const apiUrl = (settings && settings.apiUrl) || '';
+        const apiToken = (settings && settings.apiToken) || '';
         try {
             const res = await fetch(apiUrl.replace(/\/$/, '') + '/devices', { headers: { Authorization: apiToken } });
             if (!res.ok) { result.textContent = 'HTTP ' + res.status; return; }
             const j = await res.json();
             const n = (Object.keys(j.switches || {}).length) + (Object.keys(j.lights || {}).length);
             result.textContent = 'OK - ' + n + ' device(s) reported';
+            await persistGlobalLocally();
+            setTimeout(refreshPicker, 50);
         } catch (e) {
             result.textContent = 'Error - ' + e.message;
         }

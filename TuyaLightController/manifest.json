@@ -37,6 +37,27 @@
       "PropertyInspectorPath": "Actions/TurnOnOffAction/TurnOnOffAction.html"
     },
     {
+      "Icon": "Actions/SceneAction/SceneIcon",
+      "Name": "Apply Scene",
+      "States": [
+        {
+          "Image": "Actions/SceneAction/SceneOn",
+          "TitleAlignment": "middle",
+          "FontSize": "12"
+        },
+        {
+          "Image": "Actions/SceneAction/SceneOff",
+          "TitleAlignment": "middle",
+          "FontSize": "12"
+        }
+      ],
+      "DisableAutomaticStates": true,
+      "SupportedInMultiActions": true,
+      "Tooltip": "Toggle a mixed scene on and off for selected plugs and lights",
+      "UUID": "com.gontz.tuyalightcontroller.sceneaction",
+      "PropertyInspectorPath": "Actions/SceneAction/SceneAction.html"
+    },
+    {
       "Icon": "Actions/SetColorAction/ColorIcon",
       "Name": "Change Color",
       "States": [

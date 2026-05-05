@@ -1,16 +1,19 @@
 using BarRaider.SdTools;
 using BarRaider.SdTools.Events;
 using BarRaider.SdTools.Wrappers;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 namespace TuyaLightController {
     [PluginActionId("com.gontz.tuyalightcontroller.globalsettingsaction")]
     public class GlobalSettingsAction : KeypadBase {
-        private GlobalSettings settings = new GlobalSettings();
+        private GlobalSettings settings;
 
         public GlobalSettingsAction(SDConnection connection, InitialPayload payload)
             : base(connection, payload)
         {
+            settings = SettingsCache.Load();
+            TuyaApiClient.CurrentSettings = settings;
             GlobalSettingsManager.Instance.RequestGlobalSettings();
             Connection.OnPropertyInspectorDidAppear += OnPropertyInspectorOpened;
         }
@@ -39,13 +42,23 @@ namespace TuyaLightController {
         public override void OnTick() { }
 
         public override void ReceivedSettings(ReceivedSettingsPayload payload) {
-            settings = payload.Settings.ToObject<GlobalSettings>() ?? new GlobalSettings();
+            if (settings == null) {
+                settings = new GlobalSettings();
+            }
+            JsonConvert.PopulateObject(payload.Settings.ToString(), settings);
+            settings.Normalize();
             TuyaApiClient.CurrentSettings = settings;
+            SettingsCache.Save(settings);
             GlobalSettingsManager.Instance.SetGlobalSettings(JObject.FromObject(settings));
         }
 
         public override void ReceivedGlobalSettings(ReceivedGlobalSettingsPayload payload) {
-            settings = payload.Settings.ToObject<GlobalSettings>() ?? new GlobalSettings();
+            settings = SettingsCache.Load();
+            if (payload.Settings != null && payload.Settings.HasValues) {
+                Tools.AutoPopulateSettings(settings, payload.Settings);
+                SettingsCache.Save(settings);
+            }
+            settings.Normalize();
             TuyaApiClient.CurrentSettings = settings;
             Connection.SetSettingsAsync(JObject.FromObject(settings)).GetAwaiter().GetResult();
         }

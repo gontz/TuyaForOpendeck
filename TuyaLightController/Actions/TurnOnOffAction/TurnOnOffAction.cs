@@ -8,7 +8,7 @@ namespace TuyaLightController {
         public TurnOnOffAction(SDConnection connection, InitialPayload payload)
             : base(connection, payload)
         {
-            Connection.SetStateAsync(0).GetAwaiter().GetResult();
+            Connection.SetStateAsync(1).GetAwaiter().GetResult();
         }
 
         public override async void KeyPressed(KeyPayload payload) {
@@ -34,7 +34,7 @@ namespace TuyaLightController {
                     else { await TuyaApiClient.TurnOn(slugs); isOn = true; }
                     break;
             }
-            await Connection.SetStateAsync((uint)(isOn ? 1 : 0));
+            await Connection.SetStateAsync((uint)(isOn ? 0 : 1));
         }
     }
 }

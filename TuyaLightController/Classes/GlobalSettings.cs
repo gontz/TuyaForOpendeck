@@ -14,5 +14,9 @@ namespace TuyaLightController {
 
         [JsonProperty(PropertyName = "defaultDevices")]
         public DeviceSlugSettings DefaultDevices { get; set; } = new DeviceSlugSettings();
+
+        public void Normalize() {
+            DefaultDevices?.Normalize();
+        }
     }
 }

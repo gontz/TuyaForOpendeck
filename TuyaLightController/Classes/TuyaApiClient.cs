@@ -33,11 +33,34 @@ namespace TuyaLightController {
             Task.WhenAll(slugs.Where(IsLight).Select(slug =>
                 SendForLight(slug, color: new[] { ((h % 360) + 360) % 360, Clamp(s, 0, 100), Clamp(v, 0, 100) })));
 
+        public static Task SetWhiteMode(IEnumerable<string> slugs) =>
+            Task.WhenAll(slugs.Where(IsLight).Select(s => SendForLight(s, mode: "white")));
+
+        public static async Task ApplyScene(IEnumerable<string> slugs, bool powerOn, int brightness, int temp) {
+            var sceneSlugs = slugs?.Distinct().ToList() ?? new List<string>();
+            if (sceneSlugs.Count == 0) {
+                return;
+            }
+
+            if (!powerOn) {
+                await TurnOff(sceneSlugs).ConfigureAwait(false);
+                return;
+            }
+
+            await TurnOn(sceneSlugs).ConfigureAwait(false);
+            await Task.Delay(200).ConfigureAwait(false);
+            await SetWhiteMode(sceneSlugs).ConfigureAwait(false);
+            await Task.Delay(350).ConfigureAwait(false);
+            await SetBrightness(sceneSlugs, brightness).ConfigureAwait(false);
+            await Task.Delay(150).ConfigureAwait(false);
+            await SetTemperature(sceneSlugs, temp).ConfigureAwait(false);
+        }
+
         public static async Task<List<TuyaDeviceInfo>> GetDevicesAsync() {
             if (!HasConfig()) return new List<TuyaDeviceInfo>();
             var url = BaseUrl() + "/devices";
             using (var req = new HttpRequestMessage(HttpMethod.Get, url)) {
-                req.Headers.Add("Authorization", CurrentSettings.ApiToken);
+                AddAuthorizationHeader(req);
                 try {
                     var res = await Http.SendAsync(req).ConfigureAwait(false);
                     if (!res.IsSuccessStatusCode) {
@@ -68,11 +91,13 @@ namespace TuyaLightController {
             bool? state = null,
             int? brightness = null,
             int? temp = null,
-            int[] color = null)
+            int[] color = null,
+            string mode = null)
         {
             if (!HasConfig()) return;
             var body = new Dictionary<string, object>();
             if (state.HasValue) body["state"] = state.Value;
+            if (!string.IsNullOrWhiteSpace(mode)) body["mode"] = mode;
             if (brightness.HasValue) body["brightness"] = brightness.Value;
             if (temp.HasValue) body["temp"] = temp.Value;
             if (color != null) body["color"] = color;
@@ -89,7 +114,7 @@ namespace TuyaLightController {
         private static async Task PostJson(string url, object body, string slugForLog) {
             using (var req = new HttpRequestMessage(HttpMethod.Post, url)) {
                 req.Content = new StringContent(JsonConvert.SerializeObject(body), Encoding.UTF8, "application/json");
-                req.Headers.Add("Authorization", CurrentSettings.ApiToken);
+                AddAuthorizationHeader(req);
                 try {
                     var res = await Http.SendAsync(req).ConfigureAwait(false);
                     if (!res.IsSuccessStatusCode) {
@@ -111,6 +136,12 @@ namespace TuyaLightController {
                 return false;
             }
             return true;
+        }
+
+        private static void AddAuthorizationHeader(HttpRequestMessage req) {
+            if (!string.IsNullOrWhiteSpace(CurrentSettings?.ApiToken)) {
+                req.Headers.Add("Authorization", CurrentSettings.ApiToken);
+            }
         }
 
         private static string BaseUrl() => CurrentSettings.ApiUrl.TrimEnd('/');

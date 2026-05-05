@@ -28,7 +28,11 @@
 </div>
 <script>
 window.addEventListener('load', () => {
-    tuyaDevicePicker('picker', 'devices.deviceSlugListString');
+    tuyaDevicePicker('picker', 'devices.deviceSlugListString', {
+        useGlobalPath: 'devices.useGlobalSettingsOption',
+        globalSettingPath: 'defaultDevices.deviceSlugListString',
+        readOnlyWhenGlobal: true
+    });
 });
 </script>
 </body>

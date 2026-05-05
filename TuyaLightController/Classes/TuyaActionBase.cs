@@ -1,6 +1,7 @@
 using BarRaider.SdTools;
 using BarRaider.SdTools.Events;
 using BarRaider.SdTools.Wrappers;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -13,7 +14,7 @@ namespace TuyaLightController {
         where TSettings : class, new()
     {
         protected readonly TSettings localSettings;
-        protected GlobalSettings globalSettings = new GlobalSettings();
+        protected GlobalSettings globalSettings;
 
         protected TuyaActionBase(SDConnection connection, InitialPayload payload)
             : base(connection, payload)
@@ -25,6 +26,10 @@ namespace TuyaLightController {
             else {
                 this.localSettings = payload.Settings.ToObject<TSettings>();
             }
+            NormalizeLocalSettings();
+            globalSettings = SettingsCache.Load();
+            globalSettings?.Normalize();
+            TuyaApiClient.CurrentSettings = globalSettings;
             GlobalSettingsManager.Instance.RequestGlobalSettings();
             Connection.OnPropertyInspectorDidAppear += OnPropertyInspectorOpened;
         }
@@ -38,20 +43,26 @@ namespace TuyaLightController {
         public override void KeyReleased(KeyPayload payload) { }
 
         public override void ReceivedSettings(ReceivedSettingsPayload payload) {
-            Tools.AutoPopulateSettings(localSettings, payload.Settings);
+            JsonConvert.PopulateObject(payload.Settings.ToString(), localSettings);
+            NormalizeLocalSettings();
             SaveLocalSettings();
         }
 
         public override void ReceivedGlobalSettings(ReceivedGlobalSettingsPayload payload) {
-            globalSettings = payload.Settings.ToObject<GlobalSettings>() ?? new GlobalSettings();
+            globalSettings = SettingsCache.Load();
+            if (payload.Settings != null && payload.Settings.HasValues) {
+                Tools.AutoPopulateSettings(globalSettings, payload.Settings);
+            }
+            globalSettings?.Normalize();
             TuyaApiClient.CurrentSettings = globalSettings;
+            SettingsCache.Save(globalSettings);
         }
 
         protected List<string> ResolveSlugs(DeviceSlugSettings perAction) {
-            if (perAction == null) return globalSettings?.DefaultDevices?.DeviceSlugList ?? new List<string>();
-            return perAction.UseGlobalSettings
-                ? globalSettings?.DefaultDevices?.DeviceSlugList ?? new List<string>()
-                : perAction.DeviceSlugList;
+            var globalSlugs = globalSettings?.DefaultDevices?.DeviceSlugList ?? new List<string>();
+            if (perAction == null) return globalSlugs;
+            if (!perAction.UseGlobalSettings) return perAction.DeviceSlugList;
+            return globalSlugs.Count > 0 ? globalSlugs : perAction.DeviceSlugList;
         }
 
         protected Task SaveLocalSettings() =>
@@ -61,6 +72,13 @@ namespace TuyaLightController {
             SDEventReceivedEventArgs<PropertyInspectorDidAppear> e)
         {
             Connection.SetSettingsAsync(JObject.FromObject(localSettings));
+        }
+
+        private void NormalizeLocalSettings() {
+            var prop = typeof(TSettings).GetProperty("Devices");
+            if (prop?.PropertyType == typeof(DeviceSlugSettings)) {
+                ((DeviceSlugSettings)prop.GetValue(localSettings))?.Normalize();
+            }
         }
     }
 }
