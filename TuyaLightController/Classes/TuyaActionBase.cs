@@ -45,13 +45,14 @@ namespace TuyaLightController {
         public override void ReceivedSettings(ReceivedSettingsPayload payload) {
             JsonConvert.PopulateObject(payload.Settings.ToString(), localSettings);
             NormalizeLocalSettings();
-            SaveLocalSettings();
+            // Don't echo settings back: the PI initiated this update.
+            // Echoing while the user is mid-drag races with sdpi-range and snaps the slider back.
         }
 
         public override void ReceivedGlobalSettings(ReceivedGlobalSettingsPayload payload) {
             globalSettings = SettingsCache.Load();
             if (payload.Settings != null && payload.Settings.HasValues) {
-                Tools.AutoPopulateSettings(globalSettings, payload.Settings);
+                JsonConvert.PopulateObject(payload.Settings.ToString(), globalSettings);
             }
             globalSettings?.Normalize();
             TuyaApiClient.CurrentSettings = globalSettings;

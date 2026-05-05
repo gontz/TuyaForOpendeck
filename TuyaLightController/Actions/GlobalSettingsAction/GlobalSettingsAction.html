@@ -10,12 +10,58 @@
 </head>
 <body>
 <div class="sdpi-wrapper">
-    <sdpi-item label="API URL">
-        <sdpi-textfield id="apiUrlField" setting="apiUrl" placeholder="http://localhost:5000"></sdpi-textfield>
-    </sdpi-item>
-    <sdpi-item label="API Token">
-        <sdpi-password id="apiTokenField" setting="apiToken" placeholder="Authorization header, raw"></sdpi-password>
-    </sdpi-item>
+    <details open>
+        <summary><b>Local server</b></summary>
+        <sdpi-item label="Auto-start server">
+            <sdpi-checkbox setting="autoStartServer" label="Run embedded smart-room server on startup"></sdpi-checkbox>
+        </sdpi-item>
+        <sdpi-item label="Server port">
+            <sdpi-textfield id="serverPortField" setting="serverPort" placeholder="5000" inputmode="numeric"></sdpi-textfield>
+        </sdpi-item>
+        <sdpi-item label="API URL">
+            <sdpi-textfield id="apiUrlField" setting="apiUrl" placeholder="http://localhost:5000"></sdpi-textfield>
+        </sdpi-item>
+        <sdpi-item label="API Token">
+            <sdpi-password id="apiTokenField" setting="apiToken" placeholder="Authorization header, raw"></sdpi-password>
+        </sdpi-item>
+    </details>
+
+    <details open>
+        <summary><b>Tuya Cloud credentials</b></summary>
+        <sdpi-item label="Region">
+            <sdpi-select setting="tuyaRegion">
+                <option value="us">US (openapi.tuyaus.com)</option>
+                <option value="eu">EU (openapi.tuyaeu.com)</option>
+                <option value="cn">CN (openapi.tuyacn.com)</option>
+                <option value="in">IN (openapi.tuyain.com)</option>
+            </sdpi-select>
+        </sdpi-item>
+        <sdpi-item label="Client ID">
+            <sdpi-textfield setting="tuyaClientId" placeholder="Tuya IoT Access ID"></sdpi-textfield>
+        </sdpi-item>
+        <sdpi-item label="Client Secret">
+            <sdpi-password setting="tuyaClientSecret" placeholder="Tuya IoT Access Secret"></sdpi-password>
+        </sdpi-item>
+        <sdpi-item label="Cloud Sync">
+            <sdpi-button id="cloudSyncBtn">Fetch from Tuya Cloud</sdpi-button>
+        </sdpi-item>
+        <sdpi-item label="Cloud Status">
+            <div id="cloudSyncStatus" style="font-size:11px;opacity:.8"></div>
+        </sdpi-item>
+    </details>
+
+    <details>
+        <summary><b>Devices</b></summary>
+        <sdpi-item label="Plugs (JSON)">
+            <sdpi-textarea id="plugsJsonField" rows="6" placeholder='[{"button":1,"id":"bfxxxxx","name":"Plug 1"}]'></sdpi-textarea>
+        </sdpi-item>
+        <div id="plugsStatus" style="font-size:11px;margin:-4px 0 8px 0;opacity:.85"></div>
+        <sdpi-item label="Lights (JSON)">
+            <sdpi-textarea id="lightsJsonField" rows="10" placeholder='[{"slug":"bedroom-1","id":"bfxxxxx","name":"bedroom 1","v2":true,"rgb":false}]'></sdpi-textarea>
+        </sdpi-item>
+        <div id="lightsStatus" style="font-size:11px;margin:-4px 0 8px 0;opacity:.85"></div>
+    </details>
+
     <sdpi-item label="Default Devices">
         <div id="picker" style="width: 100%"></div>
     </sdpi-item>
@@ -30,12 +76,14 @@
 window.addEventListener('load', () => {
     const STORAGE_KEY = 'tuyaPluginGlobalSettings';
 
+    const unwrap = (s) => (s && s.settings) ? s.settings : (s || {});
+
     const persistGlobalLocally = async () => {
         const s = await SDPIComponents.streamDeckClient.getSettings();
-        const settings = (s && s.settings) ? s.settings : s;
+        const settings = unwrap(s);
         const payload = {
-            apiUrl: (settings && settings.apiUrl) || '',
-            apiToken: (settings && settings.apiToken) || ''
+            apiUrl: settings.apiUrl || '',
+            apiToken: settings.apiToken || ''
         };
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
     };
@@ -51,30 +99,200 @@ window.addEventListener('load', () => {
 
     refreshPicker();
 
-    for (const id of ['apiUrlField', 'apiTokenField']) {
+    for (const id of ['apiUrlField', 'apiTokenField', 'serverPortField']) {
         const el = document.getElementById(id);
         if (!el) continue;
         el.addEventListener('change', () => setTimeout(refreshPicker, 150));
         el.addEventListener('blur', () => setTimeout(refreshPicker, 150), true);
     }
 
+    // ----- Plugs / Lights JSON binding -----
+    const plugsField = document.getElementById('plugsJsonField');
+    const lightsField = document.getElementById('lightsJsonField');
+    const plugsStatus = document.getElementById('plugsStatus');
+    const lightsStatus = document.getElementById('lightsStatus');
+    const cloudSyncStatus = document.getElementById('cloudSyncStatus');
+
+    let suppress = { plugs: false, lights: false };
+
+    const fmtJson = (val) => {
+        try { return JSON.stringify(val || [], null, 2); } catch (_) { return '[]'; }
+    };
+
+    const setStatus = (el, ok, msg) => {
+        if (!el) return;
+        el.textContent = msg;
+        el.style.color = ok ? '#9fd' : '#f99';
+    };
+
+    const validatePlugs = (arr) => {
+        if (!Array.isArray(arr)) return 'must be a JSON array';
+        for (const p of arr) {
+            if (typeof p !== 'object' || p === null) return 'each entry must be an object';
+            if (typeof p.button !== 'number' || !Number.isFinite(p.button)) return 'button must be a number';
+            if (typeof p.id !== 'string' || !p.id) return 'id is required';
+        }
+        return null;
+    };
+
+    const validateLights = (arr) => {
+        if (!Array.isArray(arr)) return 'must be a JSON array';
+        for (const l of arr) {
+            if (typeof l !== 'object' || l === null) return 'each entry must be an object';
+            if (typeof l.slug !== 'string' || !l.slug) return 'slug is required';
+            if (typeof l.id !== 'string' || !l.id) return 'id is required';
+        }
+        return null;
+    };
+
+    const writeArray = async (key, arr) => {
+        const s = await SDPIComponents.streamDeckClient.getSettings();
+        const cur = unwrap(s);
+        cur[key] = arr;
+        await SDPIComponents.streamDeckClient.setSettings(cur);
+    };
+
+    const wireJsonField = (field, statusEl, key, validator) => {
+        if (!field) return;
+        const handler = async () => {
+            const raw = field.value;
+            if (!raw || !raw.trim()) {
+                setStatus(statusEl, true, 'empty');
+                await writeArray(key, []);
+                return;
+            }
+            let parsed;
+            try { parsed = JSON.parse(raw); }
+            catch (e) {
+                setStatus(statusEl, false, 'invalid JSON: ' + (e.message || ''));
+                return;
+            }
+            const err = validator(parsed);
+            if (err) {
+                setStatus(statusEl, false, err);
+                return;
+            }
+            setStatus(statusEl, true, parsed.length + ' entr' + (parsed.length === 1 ? 'y' : 'ies') + ' saved');
+            suppress[key] = true;
+            try {
+                await writeArray(key, parsed);
+            }
+            finally {
+                setTimeout(() => { suppress[key] = false; }, 250);
+            }
+            setTimeout(refreshPicker, 200);
+        };
+        field.addEventListener('change', handler);
+        field.addEventListener('blur', handler, true);
+    };
+
+    wireJsonField(plugsField, plugsStatus, 'plugs', validatePlugs);
+    wireJsonField(lightsField, lightsStatus, 'lights', validateLights);
+
+    const populateJsonFields = (settings) => {
+        if (plugsField && !suppress.plugs && document.activeElement !== plugsField) {
+            plugsField.value = fmtJson(settings.plugs);
+            setStatus(plugsStatus, true, (settings.plugs || []).length + ' entries loaded');
+        }
+        if (lightsField && !suppress.lights && document.activeElement !== lightsField) {
+            lightsField.value = fmtJson(settings.lights);
+            setStatus(lightsStatus, true, (settings.lights || []).length + ' entries loaded');
+        }
+    };
+
+    SDPIComponents.streamDeckClient.getSettings().then((s) => populateJsonFields(unwrap(s)));
+    SDPIComponents.streamDeckClient.didReceiveSettings.subscribe((s) => populateJsonFields(unwrap(s)));
+
+    document.getElementById('cloudSyncBtn').addEventListener('click', async () => {
+        const s = await SDPIComponents.streamDeckClient.getSettings();
+        const settings = unwrap(s);
+        const apiUrl = (settings.apiUrl || '').trim().replace(/\/$/, '');
+        const apiToken = settings.apiToken || '';
+        const tuyaClientId = (settings.tuyaClientId || '').trim();
+        const tuyaClientSecret = (settings.tuyaClientSecret || '').trim();
+
+        if (!apiUrl) {
+            setStatus(cloudSyncStatus, false, 'API URL is empty');
+            return;
+        }
+        if (!tuyaClientId || !tuyaClientSecret) {
+            setStatus(cloudSyncStatus, false, 'Tuya Client ID / Secret are required');
+            return;
+        }
+
+        setStatus(cloudSyncStatus, true, 'Fetching devices from Tuya Cloud...');
+
+        let res;
+        try {
+            res = await fetch(apiUrl + '/cloud/discover', {
+                method: 'POST',
+                headers: { Authorization: apiToken }
+            });
+        } catch (e) {
+            const detail = (e && (e.message || e.name)) || 'server unreachable';
+            setStatus(cloudSyncStatus, false, 'Cannot reach embedded server (' + detail + ')');
+            return;
+        }
+
+        let payload = null;
+        try { payload = await res.json(); } catch (_) { }
+        if (!res.ok) {
+            const detail = payload && payload.error ? payload.error : ('HTTP ' + res.status);
+            setStatus(cloudSyncStatus, false, 'Cloud fetch failed: ' + detail);
+            return;
+        }
+
+        const plugs = Array.isArray(payload && payload.plugs) ? payload.plugs : [];
+        const lights = Array.isArray(payload && payload.lights) ? payload.lights : [];
+        const total = Number(payload && payload.totalDevices) || 0;
+        const ignored = Number(payload && payload.ignoredDevices) || 0;
+
+        const cur = unwrap(await SDPIComponents.streamDeckClient.getSettings());
+        cur.plugs = plugs;
+        cur.lights = lights;
+        await SDPIComponents.streamDeckClient.setSettings(cur);
+
+        populateJsonFields(cur);
+        await persistGlobalLocally();
+        setTimeout(refreshPicker, 100);
+
+        const discovered = plugs.length + lights.length;
+        setStatus(
+            cloudSyncStatus,
+            true,
+            'Fetched ' + discovered + ' supported device(s) from ' + total + ' total'
+            + (ignored ? ' (' + ignored + ' ignored)' : '')
+        );
+    });
+
+    // ----- Test connection button -----
     document.getElementById('testBtn').addEventListener('click', async () => {
         const result = document.getElementById('testResult');
         result.textContent = 'Pinging...';
         const s = await SDPIComponents.streamDeckClient.getSettings();
-        const settings = (s && s.settings) ? s.settings : s;
-        const apiUrl = (settings && settings.apiUrl) || '';
-        const apiToken = (settings && settings.apiToken) || '';
+        const settings = unwrap(s);
+        const apiUrl = settings.apiUrl || '';
+        const apiToken = settings.apiToken || '';
+        const baseUrl = (apiUrl || '').trim().replace(/\/$/, '');
+        if (!baseUrl) { result.textContent = 'Error - API URL is empty'; return; }
+        let res;
         try {
-            const res = await fetch(apiUrl.replace(/\/$/, '') + '/devices', { headers: { Authorization: apiToken } });
-            if (!res.ok) { result.textContent = 'HTTP ' + res.status; return; }
+            res = await fetch(baseUrl + '/devices', { headers: { Authorization: apiToken } });
+        } catch (e) {
+            const detail = (e && (e.message || e.name)) || 'server unreachable';
+            result.textContent = 'Cannot reach ' + baseUrl + ' (' + detail + ')';
+            return;
+        }
+        if (!res.ok) { result.textContent = 'HTTP ' + res.status; return; }
+        try {
             const j = await res.json();
             const n = (Object.keys(j.switches || {}).length) + (Object.keys(j.lights || {}).length);
             result.textContent = 'OK - ' + n + ' device(s) reported';
             await persistGlobalLocally();
             setTimeout(refreshPicker, 50);
         } catch (e) {
-            result.textContent = 'Error - ' + e.message;
+            const detail = (e && (e.message || e.name)) || 'invalid response';
+            result.textContent = 'Bad response - ' + detail;
         }
     });
 });

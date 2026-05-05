@@ -1,4 +1,4 @@
-(function () {
+﻿(function () {
   const CACHE_KEY = '__tuyaDevicePickerCache';
   const CACHE_TTL_MS = 30 * 1000;
   const STORAGE_KEY = 'tuyaPluginGlobalSettings';
@@ -19,6 +19,14 @@
     }
   }
 
+  function clearDeviceCache() {
+    try {
+      delete window[CACHE_KEY];
+    } catch (_) {
+      window[CACHE_KEY] = null;
+    }
+  }
+
   async function fetchDevices(apiUrl, apiToken) {
     if (window[CACHE_KEY] && Date.now() - window[CACHE_KEY].t < CACHE_TTL_MS && window[CACHE_KEY].key === (apiUrl + '|' + apiToken)) {
       return window[CACHE_KEY].v;
@@ -28,9 +36,15 @@
       throw new Error('API URL is empty');
     }
     const url = baseUrl + '/devices';
-    const res = await fetch(url, { headers: { Authorization: apiToken || '' } });
+    let res;
+    try {
+      res = await fetch(url, { headers: { Authorization: apiToken || '' } });
+    } catch (fetchErr) {
+      const detail = (fetchErr && (fetchErr.message || fetchErr.name)) || 'server unreachable';
+      throw new Error('cannot reach ' + baseUrl + ' (' + detail + ')');
+    }
     if (!res.ok) {
-      throw new Error('HTTP ' + res.status);
+      throw new Error('HTTP ' + res.status + ' from ' + url);
     }
     const json = await res.json();
     const flat = [];
@@ -123,12 +137,16 @@
       sum.style.fontWeight = 'bold';
       wrap.appendChild(sum);
       for (const d of group) {
-        const row = document.createElement('label');
+        const row = document.createElement('div');
         row.style.display = 'block';
         row.style.padding = '6px 8px';
         row.style.margin = '4px 0';
         row.style.borderRadius = '4px';
         row.style.cursor = opts.readOnly ? 'default' : 'pointer';
+        row.style.userSelect = 'none';
+        row.style.webkitUserSelect = 'none';
+        row.style.MozUserSelect = 'none';
+        row.style.msUserSelect = 'none';
         const cb = document.createElement('input');
         cb.type = 'checkbox';
         cb.value = d.slug;
@@ -141,20 +159,24 @@
         const applySelection = (checked) => {
           if (checked) currentSet.add(d.slug);
           else currentSet.delete(d.slug);
+          cb.checked = checked;
           applySelectionStyles(row, txt, badge, checked);
           refreshSummary();
           onChange(currentSet);
         };
-        cb.addEventListener('change', () => {
-          applySelection(cb.checked);
-        });
         if (!opts.readOnly) {
           row.addEventListener('click', (ev) => {
             if (ev.target === cb) {
+              // direct checkbox click handled by its own change listener
               return;
             }
-            ev.preventDefault();
-            cb.checked = !cb.checked;
+            const isSelected = currentSet.has(d.slug);
+            applySelection(!isSelected);
+          });
+          cb.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+          });
+          cb.addEventListener('change', () => {
             applySelection(cb.checked);
           });
         }
@@ -193,6 +215,12 @@
     const host = document.getElementById(hostId);
     if (!host) return;
     const opts = options || {};
+    const state = host.__tuyaPickerState || (host.__tuyaPickerState = {
+      subscribed: false,
+      refreshToken: 0,
+      pendingRefresh: null,
+      selfWriteUntil: 0
+    });
 
     function getNested(obj, path) {
       return path.split('.').reduce((o, k) => (o && o[k] != null ? o[k] : ''), obj || {});
@@ -208,12 +236,15 @@
       cur[keys[keys.length - 1]] = value;
     }
 
-    SDPIComponents.streamDeckClient.getSettings().then(async (s) => {
-      const localSettings = unwrapSettings(s);
+    async function refresh() {
+      const token = ++state.refreshToken;
+      const localSettings = unwrapSettings(await SDPIComponents.streamDeckClient.getSettings());
+      if (token !== state.refreshToken) return;
       const storedSettings = readStoredSettings();
       const useGlobal = opts.useGlobalPath && getNested(localSettings, opts.useGlobalPath) === 'global';
       try {
         const globalRaw = await SDPIComponents.streamDeckClient.getGlobalSettings();
+        if (token !== state.refreshToken) return;
         const globalSettings = unwrapSettings(globalRaw);
         const globalDeviceCsv = getNested(globalSettings, opts.globalSettingPath || 'defaultDevices.deviceSlugListString')
           || getNested(storedSettings, opts.globalSettingPath || 'defaultDevices.deviceSlugListString')
@@ -229,11 +260,15 @@
           ? (getNested(localSettings, opts.apiTokenPath || 'apiToken') || globalSettings.apiToken || storedSettings.apiToken || '')
           : (globalSettings.apiToken || storedSettings.apiToken || getNested(localSettings, opts.apiTokenPath || 'apiToken') || '');
         const devices = await fetchDevices(apiUrl, apiToken);
+        if (token !== state.refreshToken) return;
         render(host, devices, currentSet, (set) => {
           const csv = buildCsv(set);
           SDPIComponents.streamDeckClient.getSettings().then((s2) => {
             const cur = unwrapSettings(s2);
             setNested(cur, settingPath, csv);
+            // Suppress the global-settings echo our own setSettings will trigger
+            // (GlobalSettingsAction re-broadcasts on every ReceivedSettings).
+            state.selfWriteUntil = Date.now() + 1500;
             SDPIComponents.streamDeckClient.setSettings(cur);
           });
         }, {
@@ -245,8 +280,39 @@
             : ''
         });
       } catch (err) {
-        showError(host, 'Could not fetch /devices: ' + err.message + '. Check Global Settings (API URL + token).');
+        const detail = (err && (err.message || err.name)) || 'unknown error';
+        showError(host, 'Could not fetch /devices: ' + detail + '. Check Global Settings (API URL + token).');
       }
-    });
+    }
+
+    function scheduleRefresh() {
+      if (Date.now() < state.selfWriteUntil) return;
+      if (state.pendingRefresh) {
+        clearTimeout(state.pendingRefresh);
+      }
+      state.pendingRefresh = setTimeout(() => {
+        state.pendingRefresh = null;
+        refresh();
+      }, 800);
+    }
+
+    if (!state.subscribed) {
+      state.subscribed = true;
+      if (SDPIComponents.streamDeckClient.didReceiveGlobalSettings) {
+        SDPIComponents.streamDeckClient.didReceiveGlobalSettings.subscribe(() => {
+          scheduleRefresh();
+        });
+      }
+    }
+
+    refresh();
   };
 })();
+
+
+
+
+
+
+
+

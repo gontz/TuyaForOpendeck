@@ -113,6 +113,11 @@
     <Compile Include="Classes\TuyaApiClient.cs" />
     <Compile Include="Classes\TuyaActionBase.cs" />
     <Compile Include="Classes\TuyaDialActionBase.cs" />
+    <Compile Include="Classes\TuyaCloudClient.cs" />
+    <Compile Include="Classes\TuyaDiscoveryResult.cs" />
+    <Compile Include="Classes\SmartRoomServer.cs" />
+    <Compile Include="Classes\TuyaPlug.cs" />
+    <Compile Include="Classes\TuyaLight.cs" />
     <Compile Include="Actions\TurnOnOffAction\TurnOnOffSettings.cs" />
     <Compile Include="Classes\SettingsCache.cs" />
   </ItemGroup>

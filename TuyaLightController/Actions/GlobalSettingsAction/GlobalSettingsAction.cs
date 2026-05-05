@@ -13,7 +13,9 @@ namespace TuyaLightController {
             : base(connection, payload)
         {
             settings = SettingsCache.Load();
+            settings.Normalize();
             TuyaApiClient.CurrentSettings = settings;
+            ApplyToServer();
             GlobalSettingsManager.Instance.RequestGlobalSettings();
             Connection.OnPropertyInspectorDidAppear += OnPropertyInspectorOpened;
         }
@@ -49,17 +51,19 @@ namespace TuyaLightController {
             settings.Normalize();
             TuyaApiClient.CurrentSettings = settings;
             SettingsCache.Save(settings);
+            ApplyToServer();
             GlobalSettingsManager.Instance.SetGlobalSettings(JObject.FromObject(settings));
         }
 
         public override void ReceivedGlobalSettings(ReceivedGlobalSettingsPayload payload) {
             settings = SettingsCache.Load();
             if (payload.Settings != null && payload.Settings.HasValues) {
-                Tools.AutoPopulateSettings(settings, payload.Settings);
+                JsonConvert.PopulateObject(payload.Settings.ToString(), settings);
                 SettingsCache.Save(settings);
             }
             settings.Normalize();
             TuyaApiClient.CurrentSettings = settings;
+            ApplyToServer();
             Connection.SetSettingsAsync(JObject.FromObject(settings)).GetAwaiter().GetResult();
         }
 
@@ -67,6 +71,22 @@ namespace TuyaLightController {
             SDEventReceivedEventArgs<PropertyInspectorDidAppear> e)
         {
             Connection.SetSettingsAsync(JObject.FromObject(settings)).GetAwaiter().GetResult();
+        }
+
+        private void ApplyToServer() {
+            try {
+                Program.Server.ApplySettings(settings);
+                if (settings.AutoStartServer && !Program.Server.IsRunning) {
+                    Program.Server.Start();
+                }
+                else if (!settings.AutoStartServer && Program.Server.IsRunning) {
+                    Program.Server.Stop();
+                }
+            }
+            catch (System.Exception ex) {
+                Logger.Instance.LogMessage(TracingLevel.WARN,
+                    "GlobalSettingsAction: ApplyToServer failed: " + ex.Message);
+            }
         }
     }
 }

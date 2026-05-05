@@ -1,4 +1,4 @@
-using BarRaider.SdTools;
+﻿using BarRaider.SdTools;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
@@ -177,3 +177,6 @@ namespace TuyaLightController {
         }
     }
 }
+
+
+
