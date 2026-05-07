@@ -1,3 +1,6 @@
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 using BarRaider.SdTools;
 
 namespace TuyaLightController {
@@ -19,16 +22,45 @@ namespace TuyaLightController {
             }
 
             if (isActive) {
-                await TuyaApiClient.ApplyScene(slugs, false, localSettings.Brightness, localSettings.Warmth);
+                await TuyaApiClient.TurnOff(slugs);
                 isActive = false;
             }
             else {
-                await TuyaApiClient.ApplyScene(slugs, true, localSettings.Brightness, localSettings.Warmth);
+                await ApplyWithOverrides(slugs);
                 isActive = true;
             }
 
             await Connection.SetStateAsync((uint)(isActive ? 0 : 1));
             await Connection.ShowOk();
+        }
+
+        // Smart bulbs can be powered through a smart plug. When the plug is off, the bulb has
+        // no power and isn't reachable. So: switch plugs ON first, wait for the downstream
+        // bulbs to come online, then send the atomic per-light state+brightness+temp commands.
+        private const int PlugBootDelayMs = 1500;
+
+        private async Task ApplyWithOverrides(List<string> slugs) {
+            var plugSlugs = slugs.Where(s => !TuyaApiClient.IsLight(s)).ToList();
+            var lightSlugs = slugs.Where(s => TuyaApiClient.IsLight(s)).ToList();
+
+            // Step 1 — turn the plugs on so any downstream bulb gets mains power.
+            if (plugSlugs.Count > 0) {
+                await TuyaApiClient.TurnOn(plugSlugs);
+                if (lightSlugs.Count > 0) {
+                    await Task.Delay(PlugBootDelayMs);
+                }
+            }
+
+            // Step 2 — apply atomic state+brightness+temp to each bulb in parallel.
+            if (lightSlugs.Count > 0) {
+                var tasks = new List<Task>();
+                foreach (var slug in lightSlugs) {
+                    var b = localSettings.GetBrightness(slug);
+                    var t = localSettings.GetWarmth(slug);
+                    tasks.Add(TuyaApiClient.ApplyLightState(slug, state: true, brightnessPct: b, tempPct: t));
+                }
+                await Task.WhenAll(tasks);
+            }
         }
     }
 }

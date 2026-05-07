@@ -2,194 +2,221 @@
 <html>
 <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,minimum-scale=1,user-scalable=no,minimal-ui,viewport-fit=cover">
-    <title>Tuya Light Controller - Global Settings</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/barraider/streamdeck-easypi-v2@latest/src/sdpi.css">
+    <link rel="stylesheet" href="../_shared/style.css">
     <script src="https://sdpi-components.dev/releases/v3/sdpi-components.js"></script>
+    <script src="../_shared/settingsBinding.js"></script>
     <script src="../_shared/tuyaDevicePicker.js"></script>
 </head>
 <body>
-<div class="sdpi-wrapper">
-    <details open>
-        <summary><b>Local server</b></summary>
-        <sdpi-item label="Auto-start server">
-            <sdpi-checkbox setting="autoStartServer" label="Run embedded smart-room server on startup"></sdpi-checkbox>
-        </sdpi-item>
-        <sdpi-item label="Server port">
-            <sdpi-textfield id="serverPortField" setting="serverPort" placeholder="5000" inputmode="numeric"></sdpi-textfield>
-        </sdpi-item>
-        <sdpi-item label="API URL">
-            <sdpi-textfield id="apiUrlField" setting="apiUrl" placeholder="http://localhost:5000"></sdpi-textfield>
-        </sdpi-item>
-        <sdpi-item label="API Token">
-            <sdpi-password id="apiTokenField" setting="apiToken" placeholder="Authorization header, raw"></sdpi-password>
-        </sdpi-item>
-    </details>
 
-    <details open>
-        <summary><b>Tuya Cloud credentials</b></summary>
-        <sdpi-item label="Region">
-            <sdpi-select setting="tuyaRegion">
+<!-- Local Server -->
+<div class="section">
+    <div class="section-title open" data-toggle="serverSection">Local Server</div>
+    <div class="section-body open" id="serverSection">
+        <div class="field">
+            <label class="checkbox-wrap">
+                <input type="checkbox" id="autoStartServer">
+                <span>Run embedded smart-room server on startup</span>
+            </label>
+        </div>
+        <div class="field">
+            <label>Server Port</label>
+            <input type="text" id="serverPort" placeholder="5000" inputmode="numeric">
+        </div>
+        <div class="field">
+            <label>API URL</label>
+            <input type="text" id="apiUrl" placeholder="http://localhost:5000">
+        </div>
+        <div class="field">
+            <label>API Token</label>
+            <input type="password" id="apiToken" placeholder="Authorization header, raw">
+        </div>
+    </div>
+</div>
+
+<!-- Tuya Cloud -->
+<div class="section">
+    <div class="section-title open" data-toggle="cloudSection">Tuya Cloud Credentials</div>
+    <div class="section-body open" id="cloudSection">
+        <div class="field">
+            <label>Region</label>
+            <select id="tuyaRegion">
                 <option value="us">US (openapi.tuyaus.com)</option>
                 <option value="eu">EU (openapi.tuyaeu.com)</option>
                 <option value="cn">CN (openapi.tuyacn.com)</option>
                 <option value="in">IN (openapi.tuyain.com)</option>
-            </sdpi-select>
-        </sdpi-item>
-        <sdpi-item label="Client ID">
-            <sdpi-textfield setting="tuyaClientId" placeholder="Tuya IoT Access ID"></sdpi-textfield>
-        </sdpi-item>
-        <sdpi-item label="Client Secret">
-            <sdpi-password setting="tuyaClientSecret" placeholder="Tuya IoT Access Secret"></sdpi-password>
-        </sdpi-item>
-        <sdpi-item label="Cloud Sync">
-            <sdpi-button id="cloudSyncBtn">Fetch from Tuya Cloud</sdpi-button>
-        </sdpi-item>
-        <sdpi-item label="Cloud Status">
-            <div id="cloudSyncStatus" style="font-size:11px;opacity:.8"></div>
-        </sdpi-item>
-    </details>
-
-    <details>
-        <summary><b>Devices</b></summary>
-        <sdpi-item label="Plugs (JSON)">
-            <sdpi-textarea id="plugsJsonField" rows="6" placeholder='[{"button":1,"id":"bfxxxxx","name":"Plug 1"}]'></sdpi-textarea>
-        </sdpi-item>
-        <div id="plugsStatus" style="font-size:11px;margin:-4px 0 8px 0;opacity:.85"></div>
-        <sdpi-item label="Lights (JSON)">
-            <sdpi-textarea id="lightsJsonField" rows="10" placeholder='[{"slug":"bedroom-1","id":"bfxxxxx","name":"bedroom 1","v2":true,"rgb":false}]'></sdpi-textarea>
-        </sdpi-item>
-        <div id="lightsStatus" style="font-size:11px;margin:-4px 0 8px 0;opacity:.85"></div>
-    </details>
-
-    <sdpi-item label="Default Devices">
-        <div id="picker" style="width: 100%"></div>
-    </sdpi-item>
-    <sdpi-item label="Test Connection">
-        <sdpi-button id="testBtn">Ping /devices</sdpi-button>
-    </sdpi-item>
-    <sdpi-item label="Status">
-        <div id="testResult" style="font-size:11px;opacity:.8"></div>
-    </sdpi-item>
+            </select>
+        </div>
+        <div class="field">
+            <label>Client ID</label>
+            <input type="text" id="tuyaClientId" placeholder="Tuya IoT Access ID">
+        </div>
+        <div class="field">
+            <label>Client Secret</label>
+            <input type="password" id="tuyaClientSecret" placeholder="Tuya IoT Access Secret">
+        </div>
+        <div class="field">
+            <button id="cloudSyncBtn">Fetch from Tuya Cloud</button>
+            <div class="status info" id="cloudSyncStatus"></div>
+        </div>
+    </div>
 </div>
+
+<!-- Devices JSON -->
+<div class="section">
+    <div class="section-title" data-toggle="devicesSection">Devices (JSON)</div>
+    <div class="section-body" id="devicesSection">
+        <div class="field">
+            <label>Plugs</label>
+            <textarea id="plugsJson" rows="5" placeholder='[{"button":1,"id":"bfxxxxx","name":"Plug 1"}]'></textarea>
+            <div class="status info" id="plugsStatus"></div>
+        </div>
+        <div class="field">
+            <label>Lights</label>
+            <textarea id="lightsJson" rows="8" placeholder='[{"slug":"bedroom-1","id":"bfxxxxx","name":"bedroom 1","v2":true,"rgb":false}]'></textarea>
+            <div class="status info" id="lightsStatus"></div>
+        </div>
+    </div>
+</div>
+
+<hr>
+
+<!-- Default Devices -->
+<div class="field">
+    <label>Default Devices</label>
+    <div id="picker"></div>
+</div>
+
+<!-- Test Connection -->
+<div class="field">
+    <button id="testBtn">Ping /devices</button>
+    <div class="status info" id="testResult"></div>
+</div>
+
 <script>
-window.addEventListener('load', () => {
-    const STORAGE_KEY = 'tuyaPluginGlobalSettings';
+window.addEventListener('load', function () {
+    var STORAGE_KEY = 'tuyaPluginGlobalSettings';
 
-    const unwrap = (s) => (s && s.settings) ? s.settings : (s || {});
-
-    const persistGlobalLocally = async () => {
-        const s = await SDPIComponents.streamDeckClient.getSettings();
-        const settings = unwrap(s);
-        const payload = {
-            apiUrl: settings.apiUrl || '',
-            apiToken: settings.apiToken || ''
-        };
-        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-    };
-
-    const refreshPicker = async () => {
-        await persistGlobalLocally();
-        tuyaDevicePicker('picker', 'defaultDevices.deviceSlugListString', {
-            preferLocal: true,
-            apiUrlPath: 'apiUrl',
-            apiTokenPath: 'apiToken'
+    // Section toggles
+    document.querySelectorAll('.section-title[data-toggle]').forEach(function (title) {
+        title.addEventListener('click', function () {
+            var body = document.getElementById(title.dataset.toggle);
+            if (!body) return;
+            var isOpen = body.classList.contains('open');
+            body.classList.toggle('open');
+            title.classList.toggle('open');
         });
-    };
+    });
+
+    // Bind settings
+    TuyaSettings.bind('autoStartServer', 'autoStartServer');
+    TuyaSettings.bind('serverPort', 'serverPort', { defaultValue: '5000' });
+    TuyaSettings.bind('apiUrl', 'apiUrl');
+    TuyaSettings.bind('apiToken', 'apiToken');
+    TuyaSettings.bind('tuyaRegion', 'tuyaRegion', { defaultValue: 'us' });
+    TuyaSettings.bind('tuyaClientId', 'tuyaClientId');
+    TuyaSettings.bind('tuyaClientSecret', 'tuyaClientSecret');
+    TuyaSettings.init();
+
+    function persistGlobalLocally() {
+        return TuyaSettings.getSettings().then(function (s) {
+            var payload = { apiUrl: s.apiUrl || '', apiToken: s.apiToken || '' };
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+        });
+    }
+
+    function refreshPicker() {
+        persistGlobalLocally().then(function () {
+            tuyaDevicePicker('picker', 'defaultDevices.deviceSlugListString', {
+                preferLocal: true,
+                apiUrlPath: 'apiUrl',
+                apiTokenPath: 'apiToken'
+            });
+        });
+    }
 
     refreshPicker();
 
-    for (const id of ['apiUrlField', 'apiTokenField', 'serverPortField']) {
-        const el = document.getElementById(id);
-        if (!el) continue;
-        el.addEventListener('change', () => setTimeout(refreshPicker, 150));
-        el.addEventListener('blur', () => setTimeout(refreshPicker, 150), true);
+    ['apiUrl', 'apiToken', 'serverPort'].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener('change', function () { setTimeout(refreshPicker, 150); });
+        el.addEventListener('blur', function () { setTimeout(refreshPicker, 150); });
+    });
+
+    // --- Plugs / Lights JSON ---
+    var plugsField = document.getElementById('plugsJson');
+    var lightsField = document.getElementById('lightsJson');
+    var plugsStatus = document.getElementById('plugsStatus');
+    var lightsStatus = document.getElementById('lightsStatus');
+    var suppress = { plugs: false, lights: false };
+
+    function fmtJson(val) {
+        try { return JSON.stringify(val || [], null, 2); } catch (_) { return '[]'; }
     }
 
-    // ----- Plugs / Lights JSON binding -----
-    const plugsField = document.getElementById('plugsJsonField');
-    const lightsField = document.getElementById('lightsJsonField');
-    const plugsStatus = document.getElementById('plugsStatus');
-    const lightsStatus = document.getElementById('lightsStatus');
-    const cloudSyncStatus = document.getElementById('cloudSyncStatus');
-
-    let suppress = { plugs: false, lights: false };
-
-    const fmtJson = (val) => {
-        try { return JSON.stringify(val || [], null, 2); } catch (_) { return '[]'; }
-    };
-
-    const setStatus = (el, ok, msg) => {
+    function setStatus(el, ok, msg) {
         if (!el) return;
         el.textContent = msg;
-        el.style.color = ok ? '#9fd' : '#f99';
-    };
+        el.className = 'status ' + (ok ? 'ok' : 'err');
+    }
 
-    const validatePlugs = (arr) => {
+    function validatePlugs(arr) {
         if (!Array.isArray(arr)) return 'must be a JSON array';
-        for (const p of arr) {
+        for (var i = 0; i < arr.length; i++) {
+            var p = arr[i];
             if (typeof p !== 'object' || p === null) return 'each entry must be an object';
             if (typeof p.button !== 'number' || !Number.isFinite(p.button)) return 'button must be a number';
             if (typeof p.id !== 'string' || !p.id) return 'id is required';
         }
         return null;
-    };
+    }
 
-    const validateLights = (arr) => {
+    function validateLights(arr) {
         if (!Array.isArray(arr)) return 'must be a JSON array';
-        for (const l of arr) {
+        for (var i = 0; i < arr.length; i++) {
+            var l = arr[i];
             if (typeof l !== 'object' || l === null) return 'each entry must be an object';
             if (typeof l.slug !== 'string' || !l.slug) return 'slug is required';
             if (typeof l.id !== 'string' || !l.id) return 'id is required';
         }
         return null;
-    };
+    }
 
-    const writeArray = async (key, arr) => {
-        const s = await SDPIComponents.streamDeckClient.getSettings();
-        const cur = unwrap(s);
-        cur[key] = arr;
-        await SDPIComponents.streamDeckClient.setSettings(cur);
-    };
-
-    const wireJsonField = (field, statusEl, key, validator) => {
+    function wireJsonField(field, statusEl, key, validator) {
         if (!field) return;
-        const handler = async () => {
-            const raw = field.value;
+        function handler() {
+            var raw = field.value;
             if (!raw || !raw.trim()) {
                 setStatus(statusEl, true, 'empty');
-                await writeArray(key, []);
+                TuyaSettings.getSettings().then(function (s) { s[key] = []; TuyaSettings.saveSettings(s); });
                 return;
             }
-            let parsed;
-            try { parsed = JSON.parse(raw); }
-            catch (e) {
+            var parsed;
+            try { parsed = JSON.parse(raw); } catch (e) {
                 setStatus(statusEl, false, 'invalid JSON: ' + (e.message || ''));
                 return;
             }
-            const err = validator(parsed);
-            if (err) {
-                setStatus(statusEl, false, err);
-                return;
-            }
+            var err = validator(parsed);
+            if (err) { setStatus(statusEl, false, err); return; }
             setStatus(statusEl, true, parsed.length + ' entr' + (parsed.length === 1 ? 'y' : 'ies') + ' saved');
             suppress[key] = true;
-            try {
-                await writeArray(key, parsed);
-            }
-            finally {
-                setTimeout(() => { suppress[key] = false; }, 250);
-            }
-            setTimeout(refreshPicker, 200);
-        };
+            TuyaSettings.getSettings().then(function (s) {
+                s[key] = parsed;
+                return TuyaSettings.saveSettings(s);
+            }).then(function () {
+                setTimeout(function () { suppress[key] = false; }, 250);
+                setTimeout(refreshPicker, 200);
+            });
+        }
         field.addEventListener('change', handler);
-        field.addEventListener('blur', handler, true);
-    };
+        field.addEventListener('blur', handler);
+    }
 
     wireJsonField(plugsField, plugsStatus, 'plugs', validatePlugs);
     wireJsonField(lightsField, lightsStatus, 'lights', validateLights);
 
-    const populateJsonFields = (settings) => {
+    function populateJsonFields(settings) {
         if (plugsField && !suppress.plugs && document.activeElement !== plugsField) {
             plugsField.value = fmtJson(settings.plugs);
             setStatus(plugsStatus, true, (settings.plugs || []).length + ' entries loaded');
@@ -198,102 +225,87 @@ window.addEventListener('load', () => {
             lightsField.value = fmtJson(settings.lights);
             setStatus(lightsStatus, true, (settings.lights || []).length + ' entries loaded');
         }
-    };
+    }
 
-    SDPIComponents.streamDeckClient.getSettings().then((s) => populateJsonFields(unwrap(s)));
-    SDPIComponents.streamDeckClient.didReceiveSettings.subscribe((s) => populateJsonFields(unwrap(s)));
-
-    document.getElementById('cloudSyncBtn').addEventListener('click', async () => {
-        const s = await SDPIComponents.streamDeckClient.getSettings();
-        const settings = unwrap(s);
-        const apiUrl = (settings.apiUrl || '').trim().replace(/\/$/, '');
-        const apiToken = settings.apiToken || '';
-        const tuyaClientId = (settings.tuyaClientId || '').trim();
-        const tuyaClientSecret = (settings.tuyaClientSecret || '').trim();
-
-        if (!apiUrl) {
-            setStatus(cloudSyncStatus, false, 'API URL is empty');
-            return;
-        }
-        if (!tuyaClientId || !tuyaClientSecret) {
-            setStatus(cloudSyncStatus, false, 'Tuya Client ID / Secret are required');
-            return;
-        }
-
-        setStatus(cloudSyncStatus, true, 'Fetching devices from Tuya Cloud...');
-
-        let res;
-        try {
-            res = await fetch(apiUrl + '/cloud/discover', {
-                method: 'POST',
-                headers: { Authorization: apiToken }
-            });
-        } catch (e) {
-            const detail = (e && (e.message || e.name)) || 'server unreachable';
-            setStatus(cloudSyncStatus, false, 'Cannot reach embedded server (' + detail + ')');
-            return;
-        }
-
-        let payload = null;
-        try { payload = await res.json(); } catch (_) { }
-        if (!res.ok) {
-            const detail = payload && payload.error ? payload.error : ('HTTP ' + res.status);
-            setStatus(cloudSyncStatus, false, 'Cloud fetch failed: ' + detail);
-            return;
-        }
-
-        const plugs = Array.isArray(payload && payload.plugs) ? payload.plugs : [];
-        const lights = Array.isArray(payload && payload.lights) ? payload.lights : [];
-        const total = Number(payload && payload.totalDevices) || 0;
-        const ignored = Number(payload && payload.ignoredDevices) || 0;
-
-        const cur = unwrap(await SDPIComponents.streamDeckClient.getSettings());
-        cur.plugs = plugs;
-        cur.lights = lights;
-        await SDPIComponents.streamDeckClient.setSettings(cur);
-
-        populateJsonFields(cur);
-        await persistGlobalLocally();
-        setTimeout(refreshPicker, 100);
-
-        const discovered = plugs.length + lights.length;
-        setStatus(
-            cloudSyncStatus,
-            true,
-            'Fetched ' + discovered + ' supported device(s) from ' + total + ' total'
-            + (ignored ? ' (' + ignored + ' ignored)' : '')
-        );
+    TuyaSettings.getSettings().then(populateJsonFields);
+    SDPIComponents.streamDeckClient.didReceiveSettings.subscribe(function (s) {
+        populateJsonFields(TuyaSettings.unwrap(s));
     });
 
-    // ----- Test connection button -----
-    document.getElementById('testBtn').addEventListener('click', async () => {
-        const result = document.getElementById('testResult');
+    // --- Cloud Sync ---
+    document.getElementById('cloudSyncBtn').addEventListener('click', function () {
+        var statusEl = document.getElementById('cloudSyncStatus');
+        TuyaSettings.getSettings().then(function (settings) {
+            var apiUrl = (settings.apiUrl || '').trim().replace(/\/$/, '');
+            var apiToken = settings.apiToken || '';
+            var clientId = (settings.tuyaClientId || '').trim();
+            var clientSecret = (settings.tuyaClientSecret || '').trim();
+
+            if (!apiUrl) { setStatus(statusEl, false, 'API URL is empty'); return; }
+            if (!clientId || !clientSecret) { setStatus(statusEl, false, 'Tuya Client ID / Secret required'); return; }
+
+            setStatus(statusEl, true, 'Fetching devices from Tuya Cloud...');
+
+            fetch(apiUrl + '/cloud/discover', {
+                method: 'POST',
+                headers: { 'Authorization': apiToken, 'Content-Type': 'application/json' },
+                body: '{}'
+            }).then(function (res) {
+                return res.json().then(function (payload) {
+                    if (!res.ok) throw new Error(payload.error || 'HTTP ' + res.status);
+                    return payload;
+                });
+            }).then(function (payload) {
+                var plugs = Array.isArray(payload.plugs) ? payload.plugs : [];
+                var lights = Array.isArray(payload.lights) ? payload.lights : [];
+                var total = Number(payload.totalDevices) || 0;
+                var ignored = Number(payload.ignoredDevices) || 0;
+
+                return TuyaSettings.getSettings().then(function (cur) {
+                    cur.plugs = plugs;
+                    cur.lights = lights;
+                    return TuyaSettings.saveSettings(cur).then(function () {
+                        populateJsonFields(cur);
+                        persistGlobalLocally();
+                        setTimeout(refreshPicker, 100);
+                        var discovered = plugs.length + lights.length;
+                        setStatus(statusEl, true,
+                            'Fetched ' + discovered + ' device(s) from ' + total + ' total' +
+                            (ignored ? ' (' + ignored + ' ignored)' : ''));
+                    });
+                });
+            }).catch(function (e) {
+                setStatus(statusEl, false, 'Cloud fetch failed: ' + (e.message || 'unknown'));
+            });
+        });
+    });
+
+    // --- Test Connection ---
+    document.getElementById('testBtn').addEventListener('click', function () {
+        var result = document.getElementById('testResult');
         result.textContent = 'Pinging...';
-        const s = await SDPIComponents.streamDeckClient.getSettings();
-        const settings = unwrap(s);
-        const apiUrl = settings.apiUrl || '';
-        const apiToken = settings.apiToken || '';
-        const baseUrl = (apiUrl || '').trim().replace(/\/$/, '');
-        if (!baseUrl) { result.textContent = 'Error - API URL is empty'; return; }
-        let res;
-        try {
-            res = await fetch(baseUrl + '/devices', { headers: { Authorization: apiToken } });
-        } catch (e) {
-            const detail = (e && (e.message || e.name)) || 'server unreachable';
-            result.textContent = 'Cannot reach ' + baseUrl + ' (' + detail + ')';
-            return;
-        }
-        if (!res.ok) { result.textContent = 'HTTP ' + res.status; return; }
-        try {
-            const j = await res.json();
-            const n = (Object.keys(j.switches || {}).length) + (Object.keys(j.lights || {}).length);
-            result.textContent = 'OK - ' + n + ' device(s) reported';
-            await persistGlobalLocally();
-            setTimeout(refreshPicker, 50);
-        } catch (e) {
-            const detail = (e && (e.message || e.name)) || 'invalid response';
-            result.textContent = 'Bad response - ' + detail;
-        }
+        result.className = 'status info';
+
+        TuyaSettings.getSettings().then(function (settings) {
+            var baseUrl = (settings.apiUrl || '').trim().replace(/\/$/, '');
+            var apiToken = settings.apiToken || '';
+            if (!baseUrl) { setStatus(result, false, 'API URL is empty'); return; }
+
+            fetch(baseUrl + '/devices', { headers: { Authorization: apiToken } })
+                .then(function (res) {
+                    if (!res.ok) throw new Error('HTTP ' + res.status);
+                    return res.json();
+                })
+                .then(function (j) {
+                    var n = Object.keys(j.switches || {}).length + Object.keys(j.lights || {}).length;
+                    setStatus(result, true, 'OK - ' + n + ' device(s) reported');
+                    persistGlobalLocally();
+                    setTimeout(refreshPicker, 50);
+                })
+                .catch(function (e) {
+                    setStatus(result, false, 'Error: ' + (e.message || 'unknown'));
+                });
+        });
     });
 });
 </script>

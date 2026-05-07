@@ -38,9 +38,11 @@ namespace TuyaLightController {
         public void Configure(string region, string clientId, string clientSecret) {
             lock (_settingsLock) {
                 var newBase = ResolveBaseUrl(region);
-                if (clientId != _clientId || clientSecret != _clientSecret || newBase != _baseUrl) {
-                    _clientId = clientId;
-                    _clientSecret = clientSecret;
+                var trimmedId = (clientId ?? "").Trim();
+                var trimmedSecret = (clientSecret ?? "").Trim();
+                if (trimmedId != _clientId || trimmedSecret != _clientSecret || newBase != _baseUrl) {
+                    _clientId = trimmedId;
+                    _clientSecret = trimmedSecret;
                     _baseUrl = newBase;
                     _accessToken = null;
                     _accessTokenExpiresUtc = DateTime.MinValue;
@@ -127,7 +129,8 @@ namespace TuyaLightController {
                             Name = name,
                             Slug = string.IsNullOrWhiteSpace(existingLight.Slug) ? "" : existingLight.Slug,
                             Rgb = existingLight.Rgb,
-                            V2 = existingLight.V2
+                            V2 = existingLight.V2,
+                            Category = existingLight.Category
                         }
                         : new TuyaLight {
                             Id = id,
@@ -137,6 +140,7 @@ namespace TuyaLightController {
                     light.Name = name;
                     light.Rgb = codes.Any(c => c.StartsWith("colour_data", StringComparison.OrdinalIgnoreCase));
                     light.V2 = codes.Any(c => c.EndsWith("_v2", StringComparison.OrdinalIgnoreCase));
+                    light.Category = ((string)device["category"] ?? "").ToLowerInvariant();
                     light.Slug = BuildUniqueSlug(name, id, usedSlugs, light.Slug);
                     result.Lights.Add(light);
                     continue;

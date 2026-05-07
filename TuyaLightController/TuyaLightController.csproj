@@ -118,6 +118,7 @@
     <Compile Include="Classes\SmartRoomServer.cs" />
     <Compile Include="Classes\TuyaPlug.cs" />
     <Compile Include="Classes\TuyaLight.cs" />
+    <Compile Include="Classes\LightSpec.cs" />
     <Compile Include="Actions\TurnOnOffAction\TurnOnOffSettings.cs" />
     <Compile Include="Classes\SettingsCache.cs" />
   </ItemGroup>
@@ -137,6 +138,12 @@
     </None>
     <None Include="packages.config" />
     <None Include="Actions\_shared\tuyaDevicePicker.js">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="Actions\_shared\settingsBinding.js">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="Actions\_shared\style.css">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>

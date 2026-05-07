@@ -42,6 +42,8 @@ namespace TuyaLightController {
             DefaultDevices?.Normalize();
             if (ServerPort <= 0 || ServerPort > 65535) ServerPort = 5000;
             if (string.IsNullOrWhiteSpace(TuyaRegion)) TuyaRegion = "us";
+            TuyaClientId = (TuyaClientId ?? "").Trim();
+            TuyaClientSecret = (TuyaClientSecret ?? "").Trim();
             if (Plugs == null) Plugs = new List<TuyaPlug>();
             if (Lights == null) Lights = new List<TuyaLight>();
             Plugs = Plugs

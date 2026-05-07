@@ -2,38 +2,375 @@
 <html>
 <head>
     <meta charset="utf-8" />
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/barraider/streamdeck-easypi-v2@latest/src/sdpi.css">
+    <link rel="stylesheet" href="../_shared/style.css">
     <script src="https://sdpi-components.dev/releases/v3/sdpi-components.js"></script>
+    <script src="../_shared/settingsBinding.js"></script>
     <script src="../_shared/tuyaDevicePicker.js"></script>
+    <style>
+        .scene-device {
+            display: flex; align-items: center; gap: 6px;
+            padding: 4px 6px; margin: 2px 0;
+            border-radius: 3px; background: #1e1e1e;
+            border: 1px solid transparent;
+            transition: background .1s, border-color .1s;
+        }
+        .scene-device:hover { background: #2a2a2e; }
+        .scene-device.selected {
+            background: rgba(90,159,212,.15);
+            border-color: rgba(90,159,212,.5);
+        }
+        .scene-device input[type="checkbox"] {
+            accent-color: #5a9fd4;
+            width: 13px; height: 13px;
+            cursor: pointer; flex-shrink: 0;
+            pointer-events: none;
+        }
+        .scene-device .device-name { font-size: 12px; color: #ccc; }
+        .scene-device.selected .device-name { color: #ddeeff; font-weight: 500; }
+        .scene-device .cap-tag {
+            font-size: 9px; color: #888;
+            margin-left: 4px; padding: 1px 5px;
+            border: 1px solid #444; border-radius: 8px;
+        }
+        .scene-device-settings {
+            background: #252528;
+            border: 1px solid #444;
+            border-radius: 3px;
+            padding: 6px 8px;
+            margin: 2px 0 4px 20px;
+            display: flex; gap: 10px; align-items: flex-start;
+        }
+        .scene-device-settings .field {
+            flex: 1; min-width: 0; margin-bottom: 0;
+        }
+        .scene-device-settings label {
+            font-size: 10px; display: block; margin-bottom: 2px;
+        }
+        .scene-device-settings .range-wrap { gap: 4px; }
+        .scene-device-settings button {
+            margin-top: 3px; font-size: 10px; padding: 2px 8px;
+        }
+        .scene-device-settings .color-field {
+            flex: 0 0 auto;
+        }
+        .scene-device-settings .color-field input[type="color"] {
+            width: 30px; height: 26px; padding: 0; border: 1px solid #444;
+            border-radius: 3px; background: #1e1e1e; cursor: pointer;
+        }
+        .override-badge { font-size: 9px; color: #5a9fd4; margin-left: 4px; }
+    </style>
 </head>
 <body>
-<div class="sdpi-wrapper">
-    <sdpi-item label="Use Global Default Devices">
-        <sdpi-select setting="devices.useGlobalSettingsOption">
-            <option value="global">Use Global Default Devices</option>
-            <option value="local">Use Devices Below</option>
-        </sdpi-select>
-    </sdpi-item>
-    <sdpi-item label="Devices">
-        <div id="picker" style="width: 100%"></div>
-    </sdpi-item>
 
-    <sdpi-item label="Action">
-        <sdpi-select setting="targetState">
-            <option value="toggle">Toggle</option>
-            <option value="on">Turn On</option>
-            <option value="off">Turn Off</option>
-        </sdpi-select>
-    </sdpi-item>
-
+<div class="field">
+    <label>Action</label>
+    <select id="targetState">
+        <option value="toggle">Toggle</option>
+        <option value="on">Turn On</option>
+        <option value="off">Turn Off</option>
+    </select>
 </div>
+
+<div class="field">
+    <label>Device Source</label>
+    <select id="deviceSource">
+        <option value="global">Use Global Default Devices</option>
+        <option value="local">Use Devices Below</option>
+    </select>
+</div>
+
+<div class="field">
+    <label>Devices</label>
+    <div id="picker"></div>
+</div>
+
+<div class="field-note">
+    For light devices, set brightness/warmth values to apply when turning on.
+    Plugs only respond to on/off.
+</div>
+
 <script>
-window.addEventListener('load', () => {
-    tuyaDevicePicker('picker', 'devices.deviceSlugListString', {
-        useGlobalPath: 'devices.useGlobalSettingsOption',
-        globalSettingPath: 'defaultDevices.deviceSlugListString',
-        readOnlyWhenGlobal: true
-    });
+window.addEventListener('load', function () {
+    TuyaSettings.bind('deviceSource', 'devices.useGlobalSettingsOption', { defaultValue: 'global' });
+    TuyaSettings.bind('targetState', 'targetState', { defaultValue: 'toggle' });
+    TuyaSettings.init();
+
+    var overrides = {};
+
+    function loadOverrides() {
+        return TuyaSettings.getSettings().then(function (s) {
+            try { overrides = JSON.parse(s.deviceOverrides || '{}'); }
+            catch (_) { overrides = {}; }
+            return overrides;
+        });
+    }
+
+    function saveOverrides() {
+        TuyaSettings.getSettings().then(function (s) {
+            s.deviceOverrides = JSON.stringify(overrides);
+            TuyaSettings.saveSettings(s);
+        });
+    }
+
+    function buildPicker() {
+        var host = document.getElementById('picker');
+        if (!host) return;
+
+        var STORAGE_KEY = 'tuyaPluginGlobalSettings';
+        function readStoredSettings() {
+            try { var raw = localStorage.getItem(STORAGE_KEY); return raw ? JSON.parse(raw) : {}; }
+            catch (_) { return {}; }
+        }
+        function getNested(obj, path) {
+            var parts = path.split('.'); var cur = obj;
+            for (var i = 0; i < parts.length; i++) { if (cur == null) return undefined; cur = cur[parts[i]]; }
+            return cur;
+        }
+        function setNested(obj, path, value) {
+            var parts = path.split('.'); var cur = obj;
+            for (var i = 0; i < parts.length - 1; i++) {
+                if (cur[parts[i]] == null || typeof cur[parts[i]] !== 'object') cur[parts[i]] = {};
+                cur = cur[parts[i]];
+            }
+            cur[parts[parts.length - 1]] = value;
+        }
+        function parseCsv(s) { return (s||'').split(/[\s,]+/).map(function(x){return x.trim().toLowerCase();}).filter(Boolean); }
+        function buildCsv(set) { return Array.from(set).join(',\n'); }
+        function unwrap(p) {
+            if (!p) return {};
+            if (p.settings && typeof p.settings === 'object') return p.settings;
+            if (p.payload && p.payload.settings) return p.payload.settings;
+            return p;
+        }
+
+        var CACHE_KEY = '__tuyaDevicePickerCache';
+        var CACHE_TTL = 30000;
+        function fetchDevices(apiUrl, apiToken) {
+            if (window[CACHE_KEY] && Date.now() - window[CACHE_KEY].t < CACHE_TTL &&
+                window[CACHE_KEY].key === (apiUrl+'|'+apiToken)) {
+                return Promise.resolve(window[CACHE_KEY].v);
+            }
+            var base = (apiUrl||'').trim().replace(/\/$/,'');
+            if (!base) return Promise.reject(new Error('API URL is empty'));
+            return fetch(base+'/devices', {headers:{Authorization:apiToken||''}})
+                .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+                .then(function(json){
+                    var flat = [];
+                    if(json.switches) Object.keys(json.switches).forEach(function(k){
+                        var e=json.switches[k];
+                        flat.push({slug:e.slug||('plug-'+k),name:e.name||k,isPlug:true,rgb:false});
+                    });
+                    if(json.lights) Object.keys(json.lights).forEach(function(slug){
+                        var e=json.lights[slug];
+                        flat.push({slug:slug,name:e.name||slug,isPlug:false,rgb:!!e.rgb});
+                    });
+                    window[CACHE_KEY]={t:Date.now(),key:apiUrl+'|'+apiToken,v:flat};
+                    return flat;
+                });
+        }
+
+        var state = { refreshToken: 0, selfWriteUntil: 0, subscribed: false, pendingRefresh: null };
+
+        function renderDevices(devices, currentSet, readOnly, readOnlyNote) {
+            host.innerHTML = '';
+
+            if (readOnlyNote) {
+                var note = document.createElement('div');
+                note.className = 'picker-readonly-note';
+                note.textContent = readOnlyNote;
+                host.appendChild(note);
+            }
+
+            var summary = document.createElement('div');
+            summary.className = 'picker-summary' + (currentSet.size ? ' has-selection' : '');
+            function updateSummary() {
+                var sel = devices.filter(function(d){return currentSet.has(d.slug);});
+                summary.textContent = sel.length ? sel.map(function(d){return d.name;}).join(', ') : 'No devices selected';
+                summary.className = 'picker-summary' + (sel.length ? ' has-selection' : '');
+            }
+            updateSummary();
+            host.appendChild(summary);
+
+            function saveDevices() {
+                var csv = buildCsv(currentSet);
+                SDPIComponents.streamDeckClient.getSettings().then(function(s2){
+                    var cur = unwrap(s2);
+                    setNested(cur, 'devices.deviceSlugListString', csv);
+                    state.selfWriteUntil = Date.now() + 1500;
+                    SDPIComponents.streamDeckClient.setSettings(cur);
+                });
+            }
+
+            function renderGroup(devList, title) {
+                if (!devList.length) return;
+                var titleEl = document.createElement('div');
+                titleEl.className = 'picker-group-title';
+                titleEl.textContent = title + ' (' + devList.length + ')';
+                host.appendChild(titleEl);
+
+                devList.forEach(function (d) {
+                    var row = document.createElement('div');
+                    row.className = 'scene-device' + (currentSet.has(d.slug) ? ' selected' : '');
+
+                    var cb = document.createElement('input');
+                    cb.type = 'checkbox';
+                    cb.checked = currentSet.has(d.slug);
+                    if (readOnly) cb.disabled = true;
+                    row.appendChild(cb);
+
+                    var nameSpan = document.createElement('span');
+                    nameSpan.className = 'device-name';
+                    nameSpan.textContent = d.name;
+                    row.appendChild(nameSpan);
+
+                    // Capability tag (white / RGB / plug)
+                    var tag = document.createElement('span');
+                    tag.className = 'cap-tag';
+                    tag.textContent = d.isPlug ? 'plug' : (d.rgb ? 'RGB+CCT' : 'CCT');
+                    row.appendChild(tag);
+
+                    var settingsPanel = null;
+
+                    if (!d.isPlug) {
+                        if (overrides[d.slug]) {
+                            var badge = document.createElement('span');
+                            badge.className = 'override-badge';
+                            badge.textContent = '⚙';
+                            nameSpan.appendChild(badge);
+                        }
+
+                        settingsPanel = document.createElement('div');
+                        settingsPanel.className = 'scene-device-settings';
+
+                        var ov = overrides[d.slug] || {};
+
+                        // Brightness
+                        var bField = document.createElement('div');
+                        bField.className = 'field';
+                        var bLabel = document.createElement('label');
+                        bLabel.textContent = 'Brightness (%)';
+                        bField.appendChild(bLabel);
+                        var bWrap = document.createElement('div');
+                        bWrap.className = 'range-wrap';
+                        var bRange = document.createElement('input');
+                        bRange.type = 'range'; bRange.min = '0'; bRange.max = '100'; bRange.step = '1';
+                        bRange.value = ov.brightness != null ? ov.brightness : 75;
+                        var bVal = document.createElement('span');
+                        bVal.className = 'range-value';
+                        bVal.textContent = bRange.value;
+                        bWrap.appendChild(bRange);
+                        bWrap.appendChild(bVal);
+                        bField.appendChild(bWrap);
+                        settingsPanel.appendChild(bField);
+
+                        // Warmth
+                        var wField = document.createElement('div');
+                        wField.className = 'field';
+                        var wLabel = document.createElement('label');
+                        wLabel.textContent = 'Warmth (%)';
+                        wField.appendChild(wLabel);
+                        var wWrap = document.createElement('div');
+                        wWrap.className = 'range-wrap';
+                        var wRange = document.createElement('input');
+                        wRange.type = 'range'; wRange.min = '0'; wRange.max = '100'; wRange.step = '1';
+                        wRange.value = ov.warmth != null ? ov.warmth : 50;
+                        var wVal = document.createElement('span');
+                        wVal.className = 'range-value';
+                        wVal.textContent = wRange.value;
+                        wWrap.appendChild(wRange);
+                        wWrap.appendChild(wVal);
+                        wField.appendChild(wWrap);
+                        settingsPanel.appendChild(wField);
+
+                        bRange.addEventListener('input', function () { bVal.textContent = bRange.value; });
+                        wRange.addEventListener('input', function () { wVal.textContent = wRange.value; });
+
+                        function saveDeviceOverride() {
+                            if (!overrides[d.slug]) overrides[d.slug] = {};
+                            overrides[d.slug].brightness = parseInt(bRange.value);
+                            overrides[d.slug].warmth = parseInt(wRange.value);
+                            saveOverrides();
+                        }
+
+                        bRange.addEventListener('change', saveDeviceOverride);
+                        wRange.addEventListener('change', saveDeviceOverride);
+
+                        // Stop slider events from reaching the row's selection toggle.
+                        settingsPanel.addEventListener('click', function (e) { e.stopPropagation(); });
+                        settingsPanel.addEventListener('mousedown', function (e) { e.stopPropagation(); });
+                    }
+
+                    if (!readOnly) {
+                        row.addEventListener('click', function (e) {
+                            var isSel = currentSet.has(d.slug);
+                            if (isSel) currentSet.delete(d.slug);
+                            else currentSet.add(d.slug);
+                            cb.checked = !isSel;
+                            row.className = 'scene-device' + (!isSel ? ' selected' : '');
+                            updateSummary();
+                            saveDevices();
+                        });
+                    }
+
+                    host.appendChild(row);
+                    if (settingsPanel) host.appendChild(settingsPanel);
+                });
+            }
+
+            var plugs = devices.filter(function(d){return d.isPlug;});
+            var lights = devices.filter(function(d){return !d.isPlug;});
+            renderGroup(plugs, 'Plugs');
+            renderGroup(lights, 'Lights');
+        }
+
+        function refresh() {
+            var token = ++state.refreshToken;
+            SDPIComponents.streamDeckClient.getSettings().then(function(rawS){
+                var localS = unwrap(rawS);
+                if(token !== state.refreshToken) return;
+                try { overrides = JSON.parse(localS.deviceOverrides || '{}'); } catch(_) { overrides = {}; }
+                var stored = readStoredSettings();
+                var useGlobal = getNested(localS, 'devices.useGlobalSettingsOption') === 'global';
+                return SDPIComponents.streamDeckClient.getGlobalSettings().then(function(gRaw){
+                    if(token !== state.refreshToken) return;
+                    var globalS = unwrap(gRaw);
+                    var gPath = 'defaultDevices.deviceSlugListString';
+                    var gCsv = getNested(globalS, gPath) || getNested(stored, gPath) || '';
+                    var lCsv = getNested(localS, 'devices.deviceSlugListString') || '';
+                    var hasGlobal = parseCsv(gCsv).length > 0;
+                    var activeCsv = useGlobal && hasGlobal ? gCsv : lCsv;
+                    var currentSet = new Set(parseCsv(activeCsv));
+                    var apiUrl = globalS.apiUrl || stored.apiUrl || '';
+                    var apiToken = globalS.apiToken || stored.apiToken || '';
+                    return fetchDevices(apiUrl, apiToken).then(function(devices){
+                        if(token !== state.refreshToken) return;
+                        var isRO = !!(useGlobal && hasGlobal);
+                        var roNote = useGlobal ? (hasGlobal ? 'Using global defaults. Edit in Global Settings.' : 'Global defaults empty. Using local.') : '';
+                        renderDevices(devices, currentSet, isRO, roNote || undefined);
+                    });
+                });
+            }).catch(function(err){
+                host.innerHTML = '<div class="picker-error">Could not load devices: '+(err.message||'unknown')+'. Check Global Settings.</div>';
+            });
+        }
+
+        function scheduleRefresh() {
+            if (Date.now() < state.selfWriteUntil) return;
+            if (state.pendingRefresh) clearTimeout(state.pendingRefresh);
+            state.pendingRefresh = setTimeout(function(){ state.pendingRefresh = null; refresh(); }, 800);
+        }
+
+        if (!state.subscribed) {
+            state.subscribed = true;
+            if (SDPIComponents.streamDeckClient.didReceiveGlobalSettings) {
+                SDPIComponents.streamDeckClient.didReceiveGlobalSettings.subscribe(scheduleRefresh);
+            }
+        }
+
+        loadOverrides().then(function () { refresh(); });
+    }
+
+    buildPicker();
 });
 </script>
 </body>

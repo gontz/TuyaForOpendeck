@@ -36,6 +36,20 @@ namespace TuyaLightController {
         public static Task SetWhiteMode(IEnumerable<string> slugs) =>
             Task.WhenAll(slugs.Where(IsLight).Select(s => SendForLight(s, mode: "white")));
 
+        /// <summary>
+        /// Atomic per-light apply: turns the light on AND sets brightness + temp in a single HTTP call,
+        /// so Tuya processes them as one command set (no race between separate brightness/temp posts).
+        /// Plugs receive only the on command.
+        /// </summary>
+        public static Task ApplyLightState(string slug, bool state, int? brightnessPct = null, int? tempPct = null) {
+            if (!IsLight(slug)) return SendForPlug(slug, state);
+            return SendForLight(
+                slug,
+                state: state,
+                brightness: brightnessPct.HasValue ? (int?)Clamp(brightnessPct.Value, 0, 100) : null,
+                temp: tempPct.HasValue ? (int?)Clamp(tempPct.Value, 0, 100) : null);
+        }
+
         public static async Task ApplyScene(IEnumerable<string> slugs, bool powerOn, int brightness, int temp) {
             var sceneSlugs = slugs?.Distinct().ToList() ?? new List<string>();
             if (sceneSlugs.Count == 0) {

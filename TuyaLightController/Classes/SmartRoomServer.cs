@@ -248,11 +248,11 @@ namespace TuyaLightController {
 
             var body = await ReadJsonBody(ctx.Request).ConfigureAwait(false);
             var commands = new List<Dictionary<string, object>>();
-            string suffix = light.V2 ? "_v2" : "";
+            var spec = LightSpec.For(light);
 
             if (body["state"] != null) {
                 commands.Add(new Dictionary<string, object> {
-                    ["code"] = "switch_led",
+                    ["code"] = spec.SwitchCode,
                     ["value"] = (bool?)body["state"] ?? false
                 });
             }
@@ -262,20 +262,22 @@ namespace TuyaLightController {
                     await WriteJson(ctx, 400, new { error = "invalid mode: " + mode }).ConfigureAwait(false);
                     return;
                 }
-                commands.Add(new Dictionary<string, object> { ["code"] = "work_mode", ["value"] = mode });
+                commands.Add(new Dictionary<string, object> {
+                    ["code"] = spec.WorkModeCode, ["value"] = mode
+                });
             }
             if (body["brightness"] != null) {
                 int pct = (int?)body["brightness"] ?? 0;
                 commands.Add(new Dictionary<string, object> {
-                    ["code"] = "bright_value" + suffix,
-                    ["value"] = Scale(pct, 100, 0, 1000)
+                    ["code"] = spec.BrightnessCode,
+                    ["value"] = Scale(pct, 100, spec.BrightnessMin, spec.BrightnessMax)
                 });
             }
             if (body["temp"] != null) {
                 int pct = (int?)body["temp"] ?? 0;
                 commands.Add(new Dictionary<string, object> {
-                    ["code"] = "temp_value" + suffix,
-                    ["value"] = Scale(pct, 100, 0, 1000)
+                    ["code"] = spec.TempCode,
+                    ["value"] = Scale(pct, 100, spec.TempMin, spec.TempMax)
                 });
             }
             if (body["color"] != null) {
@@ -292,11 +294,11 @@ namespace TuyaLightController {
                 int s = (int?)color[1] ?? 0;
                 int v = (int?)color[2] ?? 0;
                 commands.Add(new Dictionary<string, object> {
-                    ["code"] = "colour_data" + suffix,
+                    ["code"] = spec.ColorCode,
                     ["value"] = new {
-                        h = Math.Max(0, Math.Min(360, h)),
-                        s = Scale(s, 100, 0, 1000),
-                        v = Scale(v, 100, 0, 1000)
+                        h = Math.Max(0, Math.Min(spec.ColorHueMax, h)),
+                        s = Scale(s, 100, 0, spec.ColorSatMax),
+                        v = Scale(v, 100, 0, spec.ColorValMax)
                     }
                 });
             }

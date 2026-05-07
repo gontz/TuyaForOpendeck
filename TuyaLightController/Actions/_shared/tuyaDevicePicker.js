@@ -1,296 +1,250 @@
-﻿(function () {
-  const CACHE_KEY = '__tuyaDevicePickerCache';
-  const CACHE_TTL_MS = 30 * 1000;
-  const STORAGE_KEY = 'tuyaPluginGlobalSettings';
+(function () {
+  'use strict';
 
-  function unwrapSettings(payload) {
+  var CACHE_KEY = '__tuyaDevicePickerCache';
+  var CACHE_TTL_MS = 30 * 1000;
+  var STORAGE_KEY = 'tuyaPluginGlobalSettings';
+
+  function unwrap(payload) {
     if (!payload) return {};
     if (payload.settings && typeof payload.settings === 'object') return payload.settings;
-    if (payload.payload && payload.payload.settings && typeof payload.payload.settings === 'object') return payload.payload.settings;
+    if (payload.payload && payload.payload.settings && typeof payload.payload.settings === 'object')
+      return payload.payload.settings;
     return payload;
   }
 
   function readStoredSettings() {
     try {
-      const raw = window.localStorage.getItem(STORAGE_KEY);
+      var raw = window.localStorage.getItem(STORAGE_KEY);
       return raw ? JSON.parse(raw) : {};
     } catch (_) {
       return {};
     }
   }
 
-  function clearDeviceCache() {
-    try {
-      delete window[CACHE_KEY];
-    } catch (_) {
-      window[CACHE_KEY] = null;
+  function getNested(obj, path) {
+    var parts = path.split('.');
+    var cur = obj;
+    for (var i = 0; i < parts.length; i++) {
+      if (cur == null) return undefined;
+      cur = cur[parts[i]];
     }
+    return cur;
   }
 
-  async function fetchDevices(apiUrl, apiToken) {
-    if (window[CACHE_KEY] && Date.now() - window[CACHE_KEY].t < CACHE_TTL_MS && window[CACHE_KEY].key === (apiUrl + '|' + apiToken)) {
-      return window[CACHE_KEY].v;
+  function setNested(obj, path, value) {
+    var parts = path.split('.');
+    var cur = obj;
+    for (var i = 0; i < parts.length - 1; i++) {
+      if (cur[parts[i]] == null || typeof cur[parts[i]] !== 'object') cur[parts[i]] = {};
+      cur = cur[parts[i]];
     }
-    const baseUrl = (apiUrl || '').trim().replace(/\/$/, '');
-    if (!baseUrl) {
-      throw new Error('API URL is empty');
-    }
-    const url = baseUrl + '/devices';
-    let res;
-    try {
-      res = await fetch(url, { headers: { Authorization: apiToken || '' } });
-    } catch (fetchErr) {
-      const detail = (fetchErr && (fetchErr.message || fetchErr.name)) || 'server unreachable';
-      throw new Error('cannot reach ' + baseUrl + ' (' + detail + ')');
-    }
-    if (!res.ok) {
-      throw new Error('HTTP ' + res.status + ' from ' + url);
-    }
-    const json = await res.json();
-    const flat = [];
-    if (json.switches) {
-      for (const key of Object.keys(json.switches)) {
-        const e = json.switches[key];
-        flat.push({ slug: e.slug || ('plug-' + key), name: e.name || key, isPlug: true, rgb: false });
-      }
-    }
-    if (json.lights) {
-      for (const slug of Object.keys(json.lights)) {
-        const e = json.lights[slug];
-        flat.push({ slug, name: e.name || slug, isPlug: false, rgb: !!e.rgb });
-      }
-    }
-    window[CACHE_KEY] = { t: Date.now(), key: apiUrl + '|' + apiToken, v: flat };
-    return flat;
+    cur[parts[parts.length - 1]] = value;
   }
 
   function parseCsv(s) {
-    return (s || '').split(/[\s,]+/).map((x) => x.trim().toLowerCase()).filter(Boolean);
+    return (s || '').split(/[\s,]+/).map(function (x) { return x.trim().toLowerCase(); }).filter(Boolean);
   }
 
   function buildCsv(set) {
     return Array.from(set).join(',\n');
   }
 
-  function selectedSummary(devices, currentSet) {
-    const selected = devices.filter((d) => currentSet.has(d.slug));
-    if (!selected.length) return 'No devices selected';
-    return 'Selected: ' + selected.map((d) => d.name + ' (' + d.slug + ')').join(', ');
+  function clearDeviceCache() {
+    try { delete window[CACHE_KEY]; } catch (_) { window[CACHE_KEY] = null; }
   }
 
-  function applySelectionStyles(row, txt, badge, selected) {
-    row.style.background = selected ? 'rgba(80,160,255,.20)' : 'rgba(255,255,255,.03)';
-    row.style.border = selected
-      ? '1px solid rgba(80,160,255,.6)'
-      : '1px solid rgba(255,255,255,.08)';
-    row.style.boxShadow = selected
-      ? 'inset 0 0 0 1px rgba(140,194,255,.22)'
-      : 'none';
-    txt.style.color = selected ? '#eef6ff' : '';
-    txt.style.fontWeight = selected ? '600' : '400';
-    badge.style.display = selected ? 'inline-block' : 'none';
-  }
-
-  function render(host, devices, currentSet, onChange, options) {
-    host.innerHTML = '';
-    const opts = options || {};
-    if (opts.summaryText) {
-      const summary = document.createElement('div');
-      summary.textContent = opts.summaryText;
-      summary.style.fontSize = '11px';
-      summary.style.opacity = '.8';
-      summary.style.marginBottom = '6px';
-      host.appendChild(summary);
+  function fetchDevices(apiUrl, apiToken) {
+    if (window[CACHE_KEY] && Date.now() - window[CACHE_KEY].t < CACHE_TTL_MS &&
+        window[CACHE_KEY].key === (apiUrl + '|' + apiToken)) {
+      return Promise.resolve(window[CACHE_KEY].v);
     }
-    const selection = document.createElement('div');
-    selection.textContent = selectedSummary(devices, currentSet);
-    selection.style.fontSize = '11px';
-    selection.style.marginBottom = '8px';
-    selection.style.padding = '6px';
-    selection.style.border = currentSet.size
-      ? '1px solid rgba(80,160,255,.65)'
-      : '1px solid rgba(255,255,255,.15)';
-    selection.style.borderRadius = '4px';
-    selection.style.background = currentSet.size
-      ? 'rgba(80,160,255,.18)'
-      : 'rgba(255,255,255,.04)';
-    selection.style.color = currentSet.size ? '#dcecff' : '';
-    selection.style.fontWeight = currentSet.size ? '600' : '400';
-    host.appendChild(selection);
-    const refreshSummary = () => {
-      selection.textContent = selectedSummary(devices, currentSet);
-      selection.style.border = currentSet.size
-        ? '1px solid rgba(80,160,255,.65)'
-        : '1px solid rgba(255,255,255,.15)';
-      selection.style.background = currentSet.size
-        ? 'rgba(80,160,255,.18)'
-        : 'rgba(255,255,255,.04)';
-      selection.style.color = currentSet.size ? '#dcecff' : '';
-      selection.style.fontWeight = currentSet.size ? '600' : '400';
-    };
-    const make = (group, title) => {
-      const wrap = document.createElement('details');
-      wrap.open = true;
-      wrap.style.marginBottom = '6px';
-      const sum = document.createElement('summary');
-      sum.textContent = title + ' (' + group.length + ')';
-      sum.style.fontWeight = 'bold';
-      wrap.appendChild(sum);
-      for (const d of group) {
-        const row = document.createElement('div');
-        row.style.display = 'block';
-        row.style.padding = '6px 8px';
-        row.style.margin = '4px 0';
-        row.style.borderRadius = '4px';
-        row.style.cursor = opts.readOnly ? 'default' : 'pointer';
-        row.style.userSelect = 'none';
-        row.style.webkitUserSelect = 'none';
-        row.style.MozUserSelect = 'none';
-        row.style.msUserSelect = 'none';
-        const cb = document.createElement('input');
-        cb.type = 'checkbox';
-        cb.value = d.slug;
-        cb.checked = currentSet.has(d.slug);
-        cb.disabled = !!opts.readOnly;
-        cb.style.marginRight = '8px';
-        cb.style.accentColor = '#4da3ff';
-        cb.style.transform = 'scale(1.15)';
-        cb.style.verticalAlign = 'middle';
-        const applySelection = (checked) => {
-          if (checked) currentSet.add(d.slug);
-          else currentSet.delete(d.slug);
-          cb.checked = checked;
-          applySelectionStyles(row, txt, badge, checked);
-          refreshSummary();
-          onChange(currentSet);
-        };
-        if (!opts.readOnly) {
-          row.addEventListener('click', (ev) => {
-            if (ev.target === cb) {
-              // direct checkbox click handled by its own change listener
-              return;
-            }
-            const isSelected = currentSet.has(d.slug);
-            applySelection(!isSelected);
-          });
-          cb.addEventListener('click', (ev) => {
-            ev.stopPropagation();
-          });
-          cb.addEventListener('change', () => {
-            applySelection(cb.checked);
+    var baseUrl = (apiUrl || '').trim().replace(/\/$/, '');
+    if (!baseUrl) return Promise.reject(new Error('API URL is empty'));
+
+    var url = baseUrl + '/devices';
+    return fetch(url, { headers: { Authorization: apiToken || '' } })
+      .then(function (res) {
+        if (!res.ok) throw new Error('HTTP ' + res.status + ' from ' + url);
+        return res.json();
+      })
+      .then(function (json) {
+        var flat = [];
+        if (json.switches) {
+          Object.keys(json.switches).forEach(function (key) {
+            var e = json.switches[key];
+            flat.push({ slug: e.slug || ('plug-' + key), name: e.name || key, isPlug: true, rgb: false });
           });
         }
-        row.appendChild(cb);
-        const txt = document.createElement('span');
-        txt.innerHTML = d.name + ' <small style="opacity:.6">' + d.slug + '</small>';
-        row.appendChild(txt);
-        const badge = document.createElement('span');
-        badge.textContent = ' SELECTED';
-        badge.style.marginLeft = '8px';
-        badge.style.fontSize = '10px';
-        badge.style.opacity = '1';
-        badge.style.color = '#dcecff';
-        badge.style.background = 'rgba(80,160,255,.38)';
-        badge.style.border = '1px solid rgba(140,194,255,.65)';
-        badge.style.borderRadius = '999px';
-        badge.style.padding = '1px 6px';
-        badge.style.letterSpacing = '.03em';
-        row.appendChild(badge);
-        applySelectionStyles(row, txt, badge, currentSet.has(d.slug));
-        wrap.appendChild(row);
-      }
-      return wrap;
-    };
-    const plugs = devices.filter((d) => d.isPlug);
-    const lights = devices.filter((d) => !d.isPlug);
-    if (plugs.length) host.appendChild(make(plugs, 'Plugs'));
-    if (lights.length) host.appendChild(make(lights, 'Lights'));
+        if (json.lights) {
+          Object.keys(json.lights).forEach(function (slug) {
+            var e = json.lights[slug];
+            flat.push({ slug: slug, name: e.name || slug, isPlug: false, rgb: !!e.rgb });
+          });
+        }
+        window[CACHE_KEY] = { t: Date.now(), key: apiUrl + '|' + apiToken, v: flat };
+        return flat;
+      })
+      .catch(function (err) {
+        var detail = (err && (err.message || err.name)) || 'server unreachable';
+        throw new Error('cannot reach ' + baseUrl + ' (' + detail + ')');
+      });
   }
 
-  function showError(host, msg) {
-    host.innerHTML = '<div style="background:#a33;color:#fff;padding:6px;border-radius:3px">' + msg + '</div>';
+  function renderPicker(host, devices, currentSet, onChange, opts) {
+    host.innerHTML = '';
+    opts = opts || {};
+
+    if (opts.readOnlyNote) {
+      var note = document.createElement('div');
+      note.className = 'picker-readonly-note';
+      note.textContent = opts.readOnlyNote;
+      host.appendChild(note);
+    }
+
+    var summary = document.createElement('div');
+    summary.className = 'picker-summary' + (currentSet.size ? ' has-selection' : '');
+    updateSummary(summary, devices, currentSet);
+    host.appendChild(summary);
+
+    function updateSummary(el, devs, set) {
+      var selected = devs.filter(function (d) { return set.has(d.slug); });
+      if (!selected.length) {
+        el.textContent = 'No devices selected';
+        el.className = 'picker-summary';
+      } else {
+        el.textContent = selected.map(function (d) { return d.name; }).join(', ');
+        el.className = 'picker-summary has-selection';
+      }
+    }
+
+    function renderGroup(devList, title) {
+      if (!devList.length) return;
+
+      var titleEl = document.createElement('div');
+      titleEl.className = 'picker-group-title';
+      titleEl.textContent = title + ' (' + devList.length + ')';
+      host.appendChild(titleEl);
+
+      devList.forEach(function (d) {
+        var row = document.createElement('div');
+        row.className = 'picker-device' + (currentSet.has(d.slug) ? ' selected' : '');
+
+        var cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = currentSet.has(d.slug);
+        if (opts.readOnly) cb.disabled = true;
+        row.appendChild(cb);
+
+        var nameSpan = document.createElement('span');
+        nameSpan.className = 'device-name';
+        nameSpan.textContent = d.name;
+        row.appendChild(nameSpan);
+
+        var slugSpan = document.createElement('span');
+        slugSpan.className = 'device-slug';
+        slugSpan.textContent = d.slug;
+        row.appendChild(slugSpan);
+
+        if (!opts.readOnly) {
+          row.addEventListener('click', function () {
+            var isSelected = currentSet.has(d.slug);
+            if (isSelected) {
+              currentSet.delete(d.slug);
+            } else {
+              currentSet.add(d.slug);
+            }
+            cb.checked = !isSelected;
+            row.className = 'picker-device' + (!isSelected ? ' selected' : '');
+            updateSummary(summary, devices, currentSet);
+            onChange(currentSet);
+          });
+        }
+
+        host.appendChild(row);
+      });
+    }
+
+    var plugs = devices.filter(function (d) { return d.isPlug; });
+    var lights = devices.filter(function (d) { return !d.isPlug; });
+    renderGroup(plugs, 'Plugs');
+    renderGroup(lights, 'Lights');
   }
 
   window.tuyaDevicePicker = function (hostId, settingPath, options) {
-    const host = document.getElementById(hostId);
+    var host = document.getElementById(hostId);
     if (!host) return;
-    const opts = options || {};
-    const state = host.__tuyaPickerState || (host.__tuyaPickerState = {
+    var opts = options || {};
+    var state = host.__tuyaPickerState || (host.__tuyaPickerState = {
       subscribed: false,
       refreshToken: 0,
       pendingRefresh: null,
       selfWriteUntil: 0
     });
 
-    function getNested(obj, path) {
-      return path.split('.').reduce((o, k) => (o && o[k] != null ? o[k] : ''), obj || {});
-    }
+    function refresh() {
+      var token = ++state.refreshToken;
+      SDPIComponents.streamDeckClient.getSettings()
+        .then(function (rawSettings) {
+          var localSettings = unwrap(rawSettings);
+          if (token !== state.refreshToken) return;
+          var storedSettings = readStoredSettings();
+          var useGlobal = opts.useGlobalPath && getNested(localSettings, opts.useGlobalPath) === 'global';
 
-    function setNested(obj, path, value) {
-      const keys = path.split('.');
-      let cur = obj;
-      for (let i = 0; i < keys.length - 1; i++) {
-        if (cur[keys[i]] == null || typeof cur[keys[i]] !== 'object') cur[keys[i]] = {};
-        cur = cur[keys[i]];
-      }
-      cur[keys[keys.length - 1]] = value;
-    }
+          return SDPIComponents.streamDeckClient.getGlobalSettings()
+            .then(function (globalRaw) {
+              if (token !== state.refreshToken) return;
+              var globalSettings = unwrap(globalRaw);
+              var globalPath = opts.globalSettingPath || 'defaultDevices.deviceSlugListString';
+              var globalDeviceCsv = getNested(globalSettings, globalPath)
+                || getNested(storedSettings, globalPath) || '';
+              var localDeviceCsv = getNested(localSettings, settingPath) || '';
+              var hasGlobalSelection = parseCsv(globalDeviceCsv).length > 0;
+              var activeDeviceCsv = useGlobal && hasGlobalSelection ? globalDeviceCsv : localDeviceCsv;
+              var currentSet = new Set(parseCsv(activeDeviceCsv));
 
-    async function refresh() {
-      const token = ++state.refreshToken;
-      const localSettings = unwrapSettings(await SDPIComponents.streamDeckClient.getSettings());
-      if (token !== state.refreshToken) return;
-      const storedSettings = readStoredSettings();
-      const useGlobal = opts.useGlobalPath && getNested(localSettings, opts.useGlobalPath) === 'global';
-      try {
-        const globalRaw = await SDPIComponents.streamDeckClient.getGlobalSettings();
-        if (token !== state.refreshToken) return;
-        const globalSettings = unwrapSettings(globalRaw);
-        const globalDeviceCsv = getNested(globalSettings, opts.globalSettingPath || 'defaultDevices.deviceSlugListString')
-          || getNested(storedSettings, opts.globalSettingPath || 'defaultDevices.deviceSlugListString')
-          || '';
-        const localDeviceCsv = getNested(localSettings, settingPath) || '';
-        const hasGlobalSelection = parseCsv(globalDeviceCsv).length > 0;
-        const activeDeviceCsv = useGlobal && hasGlobalSelection ? globalDeviceCsv : localDeviceCsv;
-        const currentSet = new Set(parseCsv(activeDeviceCsv));
-        const apiUrl = opts.preferLocal
-          ? (getNested(localSettings, opts.apiUrlPath || 'apiUrl') || globalSettings.apiUrl || storedSettings.apiUrl || '')
-          : (globalSettings.apiUrl || storedSettings.apiUrl || getNested(localSettings, opts.apiUrlPath || 'apiUrl') || '');
-        const apiToken = opts.preferLocal
-          ? (getNested(localSettings, opts.apiTokenPath || 'apiToken') || globalSettings.apiToken || storedSettings.apiToken || '')
-          : (globalSettings.apiToken || storedSettings.apiToken || getNested(localSettings, opts.apiTokenPath || 'apiToken') || '');
-        const devices = await fetchDevices(apiUrl, apiToken);
-        if (token !== state.refreshToken) return;
-        render(host, devices, currentSet, (set) => {
-          const csv = buildCsv(set);
-          SDPIComponents.streamDeckClient.getSettings().then((s2) => {
-            const cur = unwrapSettings(s2);
-            setNested(cur, settingPath, csv);
-            // Suppress the global-settings echo our own setSettings will trigger
-            // (GlobalSettingsAction re-broadcasts on every ReceivedSettings).
-            state.selfWriteUntil = Date.now() + 1500;
-            SDPIComponents.streamDeckClient.setSettings(cur);
-          });
-        }, {
-          readOnly: !!(useGlobal && hasGlobalSelection && opts.readOnlyWhenGlobal),
-          summaryText: useGlobal
-            ? (hasGlobalSelection
-              ? 'Using global default devices below. Edit them on the Global Settings action.'
-              : 'Global default devices are empty. Using this action\'s local device list until globals are configured.')
-            : ''
+              var apiUrl = opts.preferLocal
+                ? (getNested(localSettings, opts.apiUrlPath || 'apiUrl') || globalSettings.apiUrl || storedSettings.apiUrl || '')
+                : (globalSettings.apiUrl || storedSettings.apiUrl || getNested(localSettings, opts.apiUrlPath || 'apiUrl') || '');
+              var apiToken = opts.preferLocal
+                ? (getNested(localSettings, opts.apiTokenPath || 'apiToken') || globalSettings.apiToken || storedSettings.apiToken || '')
+                : (globalSettings.apiToken || storedSettings.apiToken || getNested(localSettings, opts.apiTokenPath || 'apiToken') || '');
+
+              return fetchDevices(apiUrl, apiToken).then(function (devices) {
+                if (token !== state.refreshToken) return;
+                var isReadOnly = !!(useGlobal && hasGlobalSelection && opts.readOnlyWhenGlobal);
+                var readOnlyNote = '';
+                if (useGlobal) {
+                  readOnlyNote = hasGlobalSelection
+                    ? 'Using global default devices. Edit in Global Settings.'
+                    : 'Global defaults empty. Using local devices.';
+                }
+                renderPicker(host, devices, currentSet, function (set) {
+                  var csv = buildCsv(set);
+                  SDPIComponents.streamDeckClient.getSettings().then(function (s2) {
+                    var cur = unwrap(s2);
+                    setNested(cur, settingPath, csv);
+                    state.selfWriteUntil = Date.now() + 1500;
+                    SDPIComponents.streamDeckClient.setSettings(cur);
+                  });
+                }, {
+                  readOnly: isReadOnly,
+                  readOnlyNote: readOnlyNote || undefined
+                });
+              });
+            });
+        })
+        .catch(function (err) {
+          var detail = (err && (err.message || err.name)) || 'unknown error';
+          host.innerHTML = '<div class="picker-error">Could not load devices: ' + detail +
+            '. Check Global Settings (API URL + token).</div>';
         });
-      } catch (err) {
-        const detail = (err && (err.message || err.name)) || 'unknown error';
-        showError(host, 'Could not fetch /devices: ' + detail + '. Check Global Settings (API URL + token).');
-      }
     }
 
     function scheduleRefresh() {
       if (Date.now() < state.selfWriteUntil) return;
-      if (state.pendingRefresh) {
-        clearTimeout(state.pendingRefresh);
-      }
-      state.pendingRefresh = setTimeout(() => {
+      if (state.pendingRefresh) clearTimeout(state.pendingRefresh);
+      state.pendingRefresh = setTimeout(function () {
         state.pendingRefresh = null;
         refresh();
       }, 800);
@@ -299,20 +253,12 @@
     if (!state.subscribed) {
       state.subscribed = true;
       if (SDPIComponents.streamDeckClient.didReceiveGlobalSettings) {
-        SDPIComponents.streamDeckClient.didReceiveGlobalSettings.subscribe(() => {
-          scheduleRefresh();
-        });
+        SDPIComponents.streamDeckClient.didReceiveGlobalSettings.subscribe(scheduleRefresh);
       }
     }
 
     refresh();
   };
+
+  window.tuyaDevicePicker.clearCache = clearDeviceCache;
 })();
-
-
-
-
-
-
-
-

@@ -2,32 +2,44 @@
 <html>
 <head>
     <meta charset="utf-8" />
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/barraider/streamdeck-easypi-v2@latest/src/sdpi.css">
+    <link rel="stylesheet" href="../_shared/style.css">
     <script src="https://sdpi-components.dev/releases/v3/sdpi-components.js"></script>
+    <script src="../_shared/settingsBinding.js"></script>
     <script src="../_shared/tuyaDevicePicker.js"></script>
 </head>
 <body>
-<div class="sdpi-wrapper">
-    <sdpi-item label="Use Global Default Devices">
-        <sdpi-select setting="devices.useGlobalSettingsOption">
-            <option value="global">Use Global Default Devices</option>
-            <option value="local">Use Devices Below</option>
-        </sdpi-select>
-    </sdpi-item>
-    <sdpi-item label="Devices">
-        <div id="picker" style="width: 100%"></div>
-    </sdpi-item>
 
-    <sdpi-item label="Warmth (%)">
-        <sdpi-range setting="warmth" min="0" max="100" step="1" showlabels></sdpi-range>
-    </sdpi-item>
-    <sdpi-item label="Note">
-        <small style="opacity:.7">0 = coldest white, 100 = warmest white. White-only bulbs respond; RGB bulbs accept this too via the white channel.</small>
-    </sdpi-item>
-
+<div class="field">
+    <label>Device Source</label>
+    <select id="deviceSource">
+        <option value="global">Use Global Default Devices</option>
+        <option value="local">Use Devices Below</option>
+    </select>
 </div>
+
+<div class="field">
+    <label>Devices</label>
+    <div id="picker"></div>
+</div>
+
+<hr>
+
+<div class="field">
+    <label>Warmth (%)</label>
+    <div class="range-wrap">
+        <input type="range" id="warmth" min="0" max="100" step="1">
+        <span class="range-value" id="warmthVal">0</span>
+    </div>
+</div>
+
+<div class="field-note">0 = coldest white, 100 = warmest white. White-only bulbs respond; RGB bulbs accept this too via the white channel.</div>
+
 <script>
-window.addEventListener('load', () => {
+window.addEventListener('load', function () {
+    TuyaSettings.bind('deviceSource', 'devices.useGlobalSettingsOption', { defaultValue: 'global' });
+    TuyaSettings.bind('warmth', 'warmth', { defaultValue: 50, valueDisplay: 'warmthVal' });
+    TuyaSettings.init();
+
     tuyaDevicePicker('picker', 'devices.deviceSlugListString', {
         useGlobalPath: 'devices.useGlobalSettingsOption',
         globalSettingPath: 'defaultDevices.deviceSlugListString',

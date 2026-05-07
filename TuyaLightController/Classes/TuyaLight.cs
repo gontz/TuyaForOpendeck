@@ -11,6 +11,10 @@ namespace TuyaLightController {
         [JsonProperty("name")]
         public string Name { get; set; } = "";
 
+        // Tuya product category code: dj=Light, dd=Light strip, xdd=Smart string light, etc.
+        [JsonProperty("category")]
+        public string Category { get; set; } = "";
+
         [JsonProperty("v2")]
         public bool V2 { get; set; }
 

@@ -2,38 +2,62 @@
 <html>
 <head>
     <meta charset="utf-8" />
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/barraider/streamdeck-easypi-v2@latest/src/sdpi.css">
+    <link rel="stylesheet" href="../_shared/style.css">
     <script src="https://sdpi-components.dev/releases/v3/sdpi-components.js"></script>
+    <script src="../_shared/settingsBinding.js"></script>
     <script src="../_shared/tuyaDevicePicker.js"></script>
 </head>
 <body>
-<div class="sdpi-wrapper">
-    <sdpi-item label="Use Global Default Devices">
-        <sdpi-select setting="devices.useGlobalSettingsOption">
-            <option value="global">Use Global Default Devices</option>
-            <option value="local">Use Devices Below</option>
-        </sdpi-select>
-    </sdpi-item>
-    <sdpi-item label="Devices">
-        <div id="picker" style="width: 100%"></div>
-    </sdpi-item>
 
-    <sdpi-item label="Hue (0-360)">
-        <sdpi-range setting="hue" min="0" max="360" step="1" showlabels></sdpi-range>
-    </sdpi-item>
-    <sdpi-item label="Saturation (%)">
-        <sdpi-range setting="saturation" min="0" max="100" step="1" showlabels></sdpi-range>
-    </sdpi-item>
-    <sdpi-item label="Value (%)">
-        <sdpi-range setting="value" min="0" max="100" step="1" showlabels></sdpi-range>
-    </sdpi-item>
-    <sdpi-item label="Note">
-        <small style="opacity:.7">White-only bulbs ignored (logged) - pick RGB bulbs for color.</small>
-    </sdpi-item>
-
+<div class="field">
+    <label>Device Source</label>
+    <select id="deviceSource">
+        <option value="global">Use Global Default Devices</option>
+        <option value="local">Use Devices Below</option>
+    </select>
 </div>
+
+<div class="field">
+    <label>Devices</label>
+    <div id="picker"></div>
+</div>
+
+<hr>
+
+<div class="field">
+    <label>Hue (0–360)</label>
+    <div class="range-wrap">
+        <input type="range" id="hue" min="0" max="360" step="1">
+        <span class="range-value" id="hueVal">0</span>
+    </div>
+</div>
+
+<div class="field">
+    <label>Saturation (%)</label>
+    <div class="range-wrap">
+        <input type="range" id="saturation" min="0" max="100" step="1">
+        <span class="range-value" id="saturationVal">0</span>
+    </div>
+</div>
+
+<div class="field">
+    <label>Value (%)</label>
+    <div class="range-wrap">
+        <input type="range" id="value" min="0" max="100" step="1">
+        <span class="range-value" id="valueVal">0</span>
+    </div>
+</div>
+
+<div class="field-note">White-only bulbs ignored — pick RGB bulbs for color.</div>
+
 <script>
-window.addEventListener('load', () => {
+window.addEventListener('load', function () {
+    TuyaSettings.bind('deviceSource', 'devices.useGlobalSettingsOption', { defaultValue: 'global' });
+    TuyaSettings.bind('hue', 'hue', { defaultValue: 0, valueDisplay: 'hueVal' });
+    TuyaSettings.bind('saturation', 'saturation', { defaultValue: 100, valueDisplay: 'saturationVal' });
+    TuyaSettings.bind('value', 'value', { defaultValue: 100, valueDisplay: 'valueVal' });
+    TuyaSettings.init();
+
     tuyaDevicePicker('picker', 'devices.deviceSlugListString', {
         useGlobalPath: 'devices.useGlobalSettingsOption',
         globalSettingPath: 'defaultDevices.deviceSlugListString',

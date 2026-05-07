@@ -192,7 +192,7 @@
   "Description": "Control Tuya devices via the local smart-room HTTP API.",
   "Icon": "Images/LightbulbGovee",
   "URL": "https://github.com/gontz/TuyaLightController",
-  "Version": "1.3.1",
+  "Version": "1.4.0",
   "CodePath": "TuyaLightController",
   "Category": "Tuya Light Controller",
   "CategoryIcon": "Images/LightbulbGoveeIcon",
