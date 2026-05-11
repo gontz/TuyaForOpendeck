@@ -3,3 +3,13 @@ obj/
 .vs/
 packages/
 *.user
+
+# tooling / runtime caches
+.claude/
+.dotnet-home/
+
+# rollback snapshots from refactor attempts
+.rollback-*/
+
+# local release artefacts (publish via gh release)
+release/

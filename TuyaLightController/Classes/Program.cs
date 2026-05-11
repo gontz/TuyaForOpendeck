@@ -6,12 +6,18 @@ namespace TuyaLightController {
         public static SmartRoomServer Server { get; } = new SmartRoomServer();
 
         static void Main(string[] args) {
+            if (args != null && Array.Exists(args, a => string.Equals(a, "--self-test", StringComparison.OrdinalIgnoreCase))) {
+                Environment.Exit(SelfTestRunner.Run());
+                return;
+            }
+
             // Uncomment this line of code to allow for debugging
             //while (!System.Diagnostics.Debugger.IsAttached) { System.Threading.Thread.Sleep(100); }
 
             try {
                 var settings = SettingsCache.Load();
                 settings.Normalize();
+                SettingsCache.Save(settings);
                 TuyaApiClient.CurrentSettings = settings;
                 Server.ApplySettings(settings);
                 if (settings.AutoStartServer) {

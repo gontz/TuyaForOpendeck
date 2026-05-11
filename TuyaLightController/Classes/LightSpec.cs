@@ -1,16 +1,13 @@
 namespace TuyaLightController {
     /// <summary>
-    /// Per-device specification: which DPS code names and value ranges Tuya expects
-    /// for THIS specific device. Resolved from the device's product category and the
-    /// V2-suffix flag.
-    ///
-    /// Reference: https://developer.tuya.com/en/docs/iot/dj
-    /// Categories observed in this user's account:
-    ///   dj  = Light (bulbs, RGB+CCT, etc) — V1 or V2 codes
-    ///   dd  = Light strip (LED tape) — V1 codes, 0..1000 range (non-standard)
-    ///   xdd = Smart string light / Ceiling light — V1 codes, 0..1000 range (non-standard)
+    /// Tuya DPS mapping for a specific light device.
+    /// Uses discovered per-device capabilities when available,
+    /// then falls back to category defaults.
     /// </summary>
     public sealed class LightSpec {
+        public string SwitchCode { get; private set; } = "switch_led";
+        public string WorkModeCode { get; private set; } = "work_mode";
+
         public string BrightnessCode { get; private set; }
         public int BrightnessMin { get; private set; }
         public int BrightnessMax { get; private set; }
@@ -20,22 +17,44 @@ namespace TuyaLightController {
         public int TempMax { get; private set; }
 
         public string ColorCode { get; private set; }
-        public int ColorHueMax { get; private set; }   // always 360
+        public int ColorHueMax { get; private set; }
         public int ColorSatMax { get; private set; }
         public int ColorValMax { get; private set; }
 
-        public string WorkModeCode => "work_mode";
-        public string SwitchCode   => "switch_led";
+        public bool SupportsWhiteMode { get; private set; } = true;
+        public bool SupportsColorMode { get; private set; } = true;
 
-        /// <summary>Resolve the spec for a given light, falling back to safe defaults.</summary>
         public static LightSpec For(TuyaLight light) {
+            var caps = light?.Capabilities;
+            if (caps != null && !string.IsNullOrWhiteSpace(caps.BrightnessCode)) {
+                return new LightSpec {
+                    SwitchCode = string.IsNullOrWhiteSpace(caps.SwitchCode) ? "switch_led" : caps.SwitchCode,
+                    WorkModeCode = string.IsNullOrWhiteSpace(caps.WorkModeCode) ? "work_mode" : caps.WorkModeCode,
+                    BrightnessCode = caps.BrightnessCode,
+                    BrightnessMin = caps.BrightnessMin,
+                    BrightnessMax = caps.BrightnessMax,
+                    TempCode = caps.TempCode,
+                    TempMin = caps.TempMin,
+                    TempMax = caps.TempMax,
+                    ColorCode = caps.ColorCode,
+                    ColorHueMax = caps.ColorHueMax <= 0 ? 360 : caps.ColorHueMax,
+                    ColorSatMax = caps.ColorSatMax <= 0 ? 255 : caps.ColorSatMax,
+                    ColorValMax = caps.ColorValMax <= 0 ? 255 : caps.ColorValMax,
+                    SupportsWhiteMode = caps.SupportsWhiteMode,
+                    SupportsColorMode = caps.SupportsColorMode
+                };
+            }
+
+            return BuildDefault(light);
+        }
+
+        private static LightSpec BuildDefault(TuyaLight light) {
             var category = (light?.Category ?? "").ToLowerInvariant();
             bool v2 = light?.V2 ?? false;
             string suffix = v2 ? "_v2" : "";
 
             switch (category) {
                 case "dj":
-                    // Standard Tuya light. V2 codes: 10..1000 ranges; V1 codes: 25..255 ranges.
                     return new LightSpec {
                         BrightnessCode = "bright_value" + suffix,
                         BrightnessMin = v2 ? 10 : 25,
@@ -49,8 +68,11 @@ namespace TuyaLightController {
                         ColorValMax = v2 ? 1000 : 255
                     };
 
-                case "dd":   // Light strip (LSC Led Strip 5M etc) — V1 names but 0..1000 range
-                case "xdd":  // Smart string / ceiling light (LSC ceiling halo etc) — V1 names but 0..1000 range
+                case "dd":
+                case "dc":
+                case "xdd":
+                case "fwd":
+                case "fsd":
                     return new LightSpec {
                         BrightnessCode = "bright_value",
                         BrightnessMin = 10,
@@ -65,7 +87,6 @@ namespace TuyaLightController {
                     };
 
                 default:
-                    // Unknown category — use V2 if flagged, else conservative V1 ranges.
                     return new LightSpec {
                         BrightnessCode = "bright_value" + suffix,
                         BrightnessMin = v2 ? 10 : 25,

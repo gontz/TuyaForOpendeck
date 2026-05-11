@@ -10,5 +10,8 @@ namespace TuyaLightController {
 
         [JsonProperty("name")]
         public string Name { get; set; } = "";
+
+        [JsonProperty("switchCode")]
+        public string SwitchCode { get; set; } = "switch_1";
     }
 }

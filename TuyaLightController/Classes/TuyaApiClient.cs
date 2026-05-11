@@ -6,6 +6,7 @@ using System.Linq;
 using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
+using Newtonsoft.Json.Linq;
 
 namespace TuyaLightController {
     /// <summary>
@@ -91,6 +92,63 @@ namespace TuyaLightController {
                     return new List<TuyaDeviceInfo>();
                 }
             }
+        }
+
+        public static async Task<Dictionary<string, TuyaDeviceStatus>> GetStatusesAsync(IEnumerable<string> slugs) {
+            var result = new Dictionary<string, TuyaDeviceStatus>(StringComparer.OrdinalIgnoreCase);
+            var slugList = (slugs ?? Enumerable.Empty<string>())
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (slugList.Count == 0 || !HasConfig()) return result;
+
+            var url = BaseUrl() + "/status";
+            var body = new Dictionary<string, object> { ["slugs"] = slugList };
+            bool requestWorked = false;
+            using (var req = new HttpRequestMessage(HttpMethod.Post, url)) {
+                req.Content = new StringContent(JsonConvert.SerializeObject(body), Encoding.UTF8, "application/json");
+                AddAuthorizationHeader(req);
+                try {
+                    var res = await Http.SendAsync(req).ConfigureAwait(false);
+                    if (!res.IsSuccessStatusCode) {
+                        Logger.Instance.LogMessage(TracingLevel.WARN,
+                            $"TuyaApiClient: POST /status returned {(int)res.StatusCode}");
+                        return MarkStatusUnavailable(slugList);
+                    }
+                    var json = await res.Content.ReadAsStringAsync().ConfigureAwait(false);
+                    var root = JObject.Parse(json);
+                    var devices = root["devices"] as JObject;
+                    if (devices == null) return result;
+                    foreach (var kv in devices) {
+                        var entry = kv.Value as JObject;
+                        if (entry == null) continue;
+                        result[kv.Key] = entry.ToObject<TuyaDeviceStatus>() ?? new TuyaDeviceStatus();
+                    }
+                    requestWorked = true;
+                }
+                catch (Exception ex) {
+                    Logger.Instance.LogMessage(TracingLevel.WARN,
+                        $"TuyaApiClient: POST /status failed: {ex.Message}");
+                }
+            }
+
+            if (!requestWorked) {
+                return MarkStatusUnavailable(slugList);
+            }
+
+            return result;
+        }
+
+        private static Dictionary<string, TuyaDeviceStatus> MarkStatusUnavailable(IEnumerable<string> slugs) {
+            var result = new Dictionary<string, TuyaDeviceStatus>(StringComparer.OrdinalIgnoreCase);
+            foreach (var slug in slugs ?? Enumerable.Empty<string>()) {
+                result[slug] = new TuyaDeviceStatus {
+                    Reachable = false,
+                    State = null,
+                    Error = "status unavailable"
+                };
+            }
+            return result;
         }
 
         public static bool IsLight(string slug) =>

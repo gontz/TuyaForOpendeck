@@ -96,6 +96,12 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Compile>
     <Compile Include="Classes\ImageTools.cs" />
+    <Compile Include="Classes\ScaleUtil.cs" />
+    <Compile Include="Classes\StatusUtil.cs" />
+    <Compile Include="Classes\SceneDispatchPlan.cs" />
+    <Compile Include="Classes\SceneDispatchPlanner.cs" />
+    <Compile Include="Classes\ToggleDecision.cs" />
+    <Compile Include="Classes\SelfTestRunner.cs" />
     <Compile Include="Actions\SetBrightnessAction\SetBrightnessAction.cs">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Compile>
@@ -114,7 +120,9 @@
     <Compile Include="Classes\TuyaActionBase.cs" />
     <Compile Include="Classes\TuyaDialActionBase.cs" />
     <Compile Include="Classes\TuyaCloudClient.cs" />
+    <Compile Include="Classes\TuyaDeviceStatus.cs" />
     <Compile Include="Classes\TuyaDiscoveryResult.cs" />
+    <Compile Include="Classes\TuyaLightCapabilities.cs" />
     <Compile Include="Classes\SmartRoomServer.cs" />
     <Compile Include="Classes\TuyaPlug.cs" />
     <Compile Include="Classes\TuyaLight.cs" />
@@ -144,6 +152,9 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Include="Actions\_shared\style.css">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="Actions\_shared\sdpi-components.js">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>

@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8" />
     <link rel="stylesheet" href="../_shared/style.css">
-    <script src="https://sdpi-components.dev/releases/v3/sdpi-components.js"></script>
+    <script src="../_shared/sdpi-components.js"></script>
     <script src="../_shared/settingsBinding.js"></script>
     <script src="../_shared/tuyaDevicePicker.js"></script>
 </head>
@@ -15,7 +15,7 @@
     <div class="section-body open" id="serverSection">
         <div class="field">
             <label class="checkbox-wrap">
-                <input type="checkbox" id="autoStartServer">
+                <input type="checkbox" id="autoStartServer" checked>
                 <span>Run embedded smart-room server on startup</span>
             </label>
         </div>
@@ -28,8 +28,9 @@
             <input type="text" id="apiUrl" placeholder="http://localhost:5000">
         </div>
         <div class="field">
-            <label>API Token</label>
-            <input type="password" id="apiToken" placeholder="Authorization header, raw">
+            <label>Local API Token (optional)</label>
+            <input type="password" id="apiToken" placeholder="Leave empty for localhost">
+            <div class="field-note">This is only for protecting the plugin's local HTTP server. Leave it empty for localhost/127.0.0.1. Fill it only if tiles point at a non-local server that expects an Authorization header.</div>
         </div>
     </div>
 </div>
@@ -41,11 +42,15 @@
         <div class="field">
             <label>Region</label>
             <select id="tuyaRegion">
-                <option value="us">US (openapi.tuyaus.com)</option>
-                <option value="eu">EU (openapi.tuyaeu.com)</option>
-                <option value="cn">CN (openapi.tuyacn.com)</option>
-                <option value="in">IN (openapi.tuyain.com)</option>
+                <option value="us">Western America - Oregon (openapi.tuyaus.com)</option>
+                <option value="us-east">Eastern America - Virginia (openapi-ueaz.tuyaus.com)</option>
+                <option value="eu">Central Europe - Frankfurt (openapi.tuyaeu.com)</option>
+                <option value="eu-west">Western Europe - Netherlands (openapi-weaz.tuyaeu.com)</option>
+                <option value="cn">China - Shanghai (openapi.tuyacn.com)</option>
+                <option value="in">India - Mumbai (openapi.tuyain.com)</option>
+                <option value="sg">Singapore (openapi-sg.iotbing.com)</option>
             </select>
+            <div class="field-note">Choose the data center used by your Tuya IoT Cloud project. Europe has two endpoints: Central Europe and Western Europe.</div>
         </div>
         <div class="field">
             <label>Client ID</label>
@@ -109,7 +114,7 @@ window.addEventListener('load', function () {
     });
 
     // Bind settings
-    TuyaSettings.bind('autoStartServer', 'autoStartServer');
+    TuyaSettings.bind('autoStartServer', 'autoStartServer', { defaultValue: true });
     TuyaSettings.bind('serverPort', 'serverPort', { defaultValue: '5000' });
     TuyaSettings.bind('apiUrl', 'apiUrl');
     TuyaSettings.bind('apiToken', 'apiToken');
@@ -120,7 +125,7 @@ window.addEventListener('load', function () {
 
     function persistGlobalLocally() {
         return TuyaSettings.getSettings().then(function (s) {
-            var payload = { apiUrl: s.apiUrl || '', apiToken: s.apiToken || '' };
+            var payload = { apiUrl: s.apiUrl || '' };
             localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
         });
     }
@@ -235,22 +240,34 @@ window.addEventListener('load', function () {
     // --- Cloud Sync ---
     document.getElementById('cloudSyncBtn').addEventListener('click', function () {
         var statusEl = document.getElementById('cloudSyncStatus');
-        TuyaSettings.getSettings().then(function (settings) {
-            var apiUrl = (settings.apiUrl || '').trim().replace(/\/$/, '');
-            var apiToken = settings.apiToken || '';
-            var clientId = (settings.tuyaClientId || '').trim();
-            var clientSecret = (settings.tuyaClientSecret || '').trim();
+        var settings = {
+            apiUrl: (document.getElementById('apiUrl').value || 'http://localhost:5000').trim(),
+            apiToken: (document.getElementById('apiToken').value || '').trim(),
+            tuyaRegion: document.getElementById('tuyaRegion').value || 'us',
+            tuyaClientId: (document.getElementById('tuyaClientId').value || '').trim(),
+            tuyaClientSecret: (document.getElementById('tuyaClientSecret').value || '').trim()
+        };
 
-            if (!apiUrl) { setStatus(statusEl, false, 'API URL is empty'); return; }
-            if (!clientId || !clientSecret) { setStatus(statusEl, false, 'Tuya Client ID / Secret required'); return; }
+        var apiUrl = (settings.apiUrl || '').trim().replace(/\/$/, '');
+        var apiToken = settings.apiToken || '';
 
-            setStatus(statusEl, true, 'Fetching devices from Tuya Cloud...');
+        if (!apiUrl) { setStatus(statusEl, false, 'API URL is empty'); return; }
+        if (!settings.tuyaClientId || !settings.tuyaClientSecret) {
+            setStatus(statusEl, false, 'Tuya Client ID / Secret required');
+            return;
+        }
 
-            fetch(apiUrl + '/cloud/discover', {
-                method: 'POST',
-                headers: { 'Authorization': apiToken, 'Content-Type': 'application/json' },
-                body: '{}'
-            }).then(function (res) {
+        setStatus(statusEl, true, 'Fetching devices from Tuya Cloud...');
+
+        fetch(apiUrl + '/cloud/discover', {
+            method: 'POST',
+            headers: { 'Authorization': apiToken, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                tuyaRegion: settings.tuyaRegion,
+                tuyaClientId: settings.tuyaClientId,
+                tuyaClientSecret: settings.tuyaClientSecret
+            })
+        }).then(function (res) {
                 return res.json().then(function (payload) {
                     if (!res.ok) throw new Error(payload.error || 'HTTP ' + res.status);
                     return payload;
@@ -261,23 +278,26 @@ window.addEventListener('load', function () {
                 var total = Number(payload.totalDevices) || 0;
                 var ignored = Number(payload.ignoredDevices) || 0;
 
-                return TuyaSettings.getSettings().then(function (cur) {
-                    cur.plugs = plugs;
-                    cur.lights = lights;
-                    return TuyaSettings.saveSettings(cur).then(function () {
-                        populateJsonFields(cur);
-                        persistGlobalLocally();
-                        setTimeout(refreshPicker, 100);
-                        var discovered = plugs.length + lights.length;
-                        setStatus(statusEl, true,
-                            'Fetched ' + discovered + ' device(s) from ' + total + ' total' +
-                            (ignored ? ' (' + ignored + ' ignored)' : ''));
-                    });
-                });
+                var cur = {
+                    apiUrl: settings.apiUrl,
+                    apiToken: settings.apiToken,
+                    tuyaRegion: settings.tuyaRegion,
+                    tuyaClientId: settings.tuyaClientId,
+                    tuyaClientSecret: settings.tuyaClientSecret,
+                    plugs: plugs,
+                    lights: lights
+                };
+                TuyaSettings.saveSettings(cur);
+                populateJsonFields(cur);
+                persistGlobalLocally();
+                setTimeout(refreshPicker, 100);
+                var discovered = plugs.length + lights.length;
+                setStatus(statusEl, true,
+                    'Fetched ' + discovered + ' device(s) from ' + total + ' total' +
+                    (ignored ? ' (' + ignored + ' ignored)' : ''));
             }).catch(function (e) {
                 setStatus(statusEl, false, 'Cloud fetch failed: ' + (e.message || 'unknown'));
             });
-        });
     });
 
     // --- Test Connection ---

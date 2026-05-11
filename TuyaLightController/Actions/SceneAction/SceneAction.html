@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8" />
     <link rel="stylesheet" href="../_shared/style.css">
-    <script src="https://sdpi-components.dev/releases/v3/sdpi-components.js"></script>
+    <script src="../_shared/sdpi-components.js"></script>
     <script src="../_shared/settingsBinding.js"></script>
     <script src="../_shared/tuyaDevicePicker.js"></script>
     <style>
@@ -71,7 +71,7 @@
     <div id="picker"></div>
 </div>
 
-<div class="field-note">Press once to apply the scene. Press again to turn those devices off. Each light has its own brightness/warmth controls.</div>
+<div class="field-note">Press to apply the scene values to configured devices. Each light has its own brightness/warmth controls.</div>
 
 <script>
 window.addEventListener('load', function () {
@@ -80,8 +80,46 @@ window.addEventListener('load', function () {
 
     var overrides = {};
 
+    function unwrapSettings(payload) {
+        if (!payload) return {};
+        if (payload.settings && typeof payload.settings === 'object') return payload.settings;
+        if (payload.payload && payload.payload.settings) return payload.payload.settings;
+        return payload;
+    }
+
+    function withTimeout(promise, fallback, ms) {
+        return new Promise(function (resolve) {
+            var done = false;
+            var timer = setTimeout(function () {
+                if (done) return;
+                done = true;
+                resolve(fallback);
+            }, ms || 800);
+
+            promise.then(function (value) {
+                if (done) return;
+                done = true;
+                clearTimeout(timer);
+                resolve(value);
+            }).catch(function () {
+                if (done) return;
+                done = true;
+                clearTimeout(timer);
+                resolve(fallback);
+            });
+        });
+    }
+
+    function readLocalSettings() {
+        return withTimeout(SDPIComponents.streamDeckClient.getSettings().then(unwrapSettings), {}, 800);
+    }
+
+    function readGlobalSettings() {
+        return withTimeout(SDPIComponents.streamDeckClient.getGlobalSettings().then(unwrapSettings), {}, 800);
+    }
+
     function loadOverrides() {
-        return TuyaSettings.getSettings().then(function (s) {
+        return readLocalSettings().then(function (s) {
             try {
                 overrides = JSON.parse(s.deviceOverrides || '{}');
             } catch (_) {
@@ -92,7 +130,7 @@ window.addEventListener('load', function () {
     }
 
     function saveOverrides() {
-        TuyaSettings.getSettings().then(function (s) {
+        readLocalSettings().then(function (s) {
             s.deviceOverrides = JSON.stringify(overrides);
             TuyaSettings.saveSettings(s);
         });
@@ -181,8 +219,7 @@ window.addEventListener('load', function () {
 
             function saveDevices() {
                 var csv = buildCsv(currentSet);
-                SDPIComponents.streamDeckClient.getSettings().then(function(s2){
-                    var cur = unwrap(s2);
+                readLocalSettings().then(function(cur){
                     setNested(cur, 'devices.deviceSlugListString', csv);
                     state.selfWriteUntil = Date.now() + 1500;
                     SDPIComponents.streamDeckClient.setSettings(cur);
@@ -337,23 +374,24 @@ window.addEventListener('load', function () {
 
         function refresh() {
             var token = ++state.refreshToken;
-            SDPIComponents.streamDeckClient.getSettings().then(function(rawS){
-                var localS = unwrap(rawS);
+            host.innerHTML = '<div class="field-note">Loading devices from the local Tuya server...</div>';
+            readLocalSettings().then(function(localS){
                 if(token !== state.refreshToken) return;
                 try { overrides = JSON.parse(localS.deviceOverrides || '{}'); } catch(_) { overrides = {}; }
                 var stored = readStoredSettings();
-                var useGlobal = getNested(localS, 'devices.useGlobalSettingsOption') === 'global';
-                return SDPIComponents.streamDeckClient.getGlobalSettings().then(function(gRaw){
+                var sourceEl = document.getElementById('deviceSource');
+                var source = getNested(localS, 'devices.useGlobalSettingsOption') || (sourceEl && sourceEl.value) || 'global';
+                var useGlobal = source === 'global';
+                return readGlobalSettings().then(function(globalS){
                     if(token !== state.refreshToken) return;
-                    var globalS = unwrap(gRaw);
                     var gPath = 'defaultDevices.deviceSlugListString';
                     var gCsv = getNested(globalS, gPath) || getNested(stored, gPath) || '';
                     var lCsv = getNested(localS, 'devices.deviceSlugListString') || '';
                     var hasGlobal = parseCsv(gCsv).length > 0;
                     var activeCsv = useGlobal && hasGlobal ? gCsv : lCsv;
                     var currentSet = new Set(parseCsv(activeCsv));
-                    var apiUrl = globalS.apiUrl || stored.apiUrl || '';
-                    var apiToken = globalS.apiToken || stored.apiToken || '';
+                    var apiUrl = globalS.apiUrl || stored.apiUrl || localS.apiUrl || 'http://localhost:5000';
+                    var apiToken = globalS.apiToken || localS.apiToken || '';
                     return fetchDevices(apiUrl, apiToken).then(function(devices){
                         if(token !== state.refreshToken) return;
                         var isRO = !!(useGlobal && hasGlobal);
@@ -379,7 +417,10 @@ window.addEventListener('load', function () {
             }
         }
 
-        loadOverrides().then(function () { refresh(); });
+        loadOverrides().then(function () { refresh(); }).catch(function () {
+            overrides = {};
+            refresh();
+        });
     }
 
     buildScenePicker();

@@ -77,6 +77,56 @@ namespace TuyaLightController {
             return resJson;
         }
 
+        public async Task<Dictionary<string, JArray>> GetLatestStatusesAsync(IReadOnlyList<string> deviceIds) {
+            var result = new Dictionary<string, JArray>(StringComparer.OrdinalIgnoreCase);
+            if (!IsConfigured) return result;
+
+            var ids = (deviceIds ?? Array.Empty<string>())
+                .Where(id => !string.IsNullOrWhiteSpace(id))
+                .Select(id => id.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (ids.Count == 0) return result;
+
+            var token = await GetAccessTokenAsync().ConfigureAwait(false);
+            foreach (var batch in Chunk(ids, 20)) {
+                var path = "/v1.0/iot-03/devices/status?device_ids=" + Uri.EscapeDataString(string.Join(",", batch));
+                try {
+                    var json = await SendSignedAsync(HttpMethod.Get, path, "", token).ConfigureAwait(false);
+                    var success = (bool?)json["success"] ?? false;
+                    if (!success) continue;
+                    var rows = json["result"] as JArray;
+                    if (rows == null) continue;
+                    foreach (var row in rows.OfType<JObject>()) {
+                        var id = ((string)row["id"] ?? "").Trim();
+                        if (string.IsNullOrWhiteSpace(id)) continue;
+                        result[id] = row["status"] as JArray ?? new JArray();
+                    }
+                }
+                catch (Exception ex) {
+                    Logger.Instance.LogMessage(TracingLevel.WARN,
+                        "TuyaCloudClient: batch status lookup failed: " + ex.Message);
+                }
+            }
+
+            foreach (var id in ids) {
+                if (result.ContainsKey(id)) continue;
+                try {
+                    var json = await SendSignedAsync(HttpMethod.Get, "/v1.0/iot-03/devices/" + id + "/status", "", token)
+                        .ConfigureAwait(false);
+                    var success = (bool?)json["success"] ?? false;
+                    if (!success) continue;
+                    result[id] = json["result"] as JArray ?? new JArray();
+                }
+                catch (Exception ex) {
+                    Logger.Instance.LogMessage(TracingLevel.WARN,
+                        "TuyaCloudClient: status lookup failed for " + id + ": " + ex.Message);
+                }
+            }
+
+            return result;
+        }
+
         public async Task<TuyaDiscoveryResult> DiscoverDevicesAsync(
             IReadOnlyList<TuyaPlug> existingPlugs = null,
             IReadOnlyList<TuyaLight> existingLights = null)
@@ -120,7 +170,8 @@ namespace TuyaLightController {
                 }
 
                 var name = ResolveDisplayName(device, id);
-                var codes = await GetCapabilityCodesAsync(device).ConfigureAwait(false);
+                var capabilities = await GetCapabilitySnapshotAsync(device).ConfigureAwait(false);
+                var codes = capabilities.Codes;
 
                 if (LooksLikeLight(codes)) {
                     var light = existingLightsById.TryGetValue(id, out var existingLight)
@@ -130,7 +181,8 @@ namespace TuyaLightController {
                             Slug = string.IsNullOrWhiteSpace(existingLight.Slug) ? "" : existingLight.Slug,
                             Rgb = existingLight.Rgb,
                             V2 = existingLight.V2,
-                            Category = existingLight.Category
+                            Category = existingLight.Category,
+                            Capabilities = existingLight.Capabilities
                         }
                         : new TuyaLight {
                             Id = id,
@@ -141,6 +193,7 @@ namespace TuyaLightController {
                     light.Rgb = codes.Any(c => c.StartsWith("colour_data", StringComparison.OrdinalIgnoreCase));
                     light.V2 = codes.Any(c => c.EndsWith("_v2", StringComparison.OrdinalIgnoreCase));
                     light.Category = ((string)device["category"] ?? "").ToLowerInvariant();
+                    light.Capabilities = BuildLightCapabilities(light, capabilities);
                     light.Slug = BuildUniqueSlug(name, id, usedSlugs, light.Slug);
                     result.Lights.Add(light);
                     continue;
@@ -153,7 +206,8 @@ namespace TuyaLightController {
                     result.Plugs.Add(new TuyaPlug {
                         Button = button,
                         Id = id,
-                        Name = name
+                        Name = name,
+                        SwitchCode = ResolvePlugSwitchCode(codes)
                     });
                     continue;
                 }
@@ -358,15 +412,17 @@ namespace TuyaLightController {
             return devices;
         }
 
-        private async Task<HashSet<string>> GetCapabilityCodesAsync(JObject device) {
-            var codes = ExtractCodes(device?["status"] as JArray);
-            if (LooksLikeLight(codes) || LooksLikePlug(codes)) {
-                return codes;
-            }
+        private sealed class CapabilitySnapshot {
+            public HashSet<string> Codes { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            public Dictionary<string, JObject> Schemas { get; } = new Dictionary<string, JObject>(StringComparer.OrdinalIgnoreCase);
+        }
 
+        private async Task<CapabilitySnapshot> GetCapabilitySnapshotAsync(JObject device) {
+            var snapshot = new CapabilitySnapshot();
+            MergeCapabilityEntries(snapshot, device?["status"] as JArray);
             var deviceId = (string)device?["id"];
             if (string.IsNullOrWhiteSpace(deviceId)) {
-                return codes;
+                return snapshot;
             }
 
             try {
@@ -375,35 +431,148 @@ namespace TuyaLightController {
                     .ConfigureAwait(false);
                 var success = (bool?)specJson["success"] ?? false;
                 if (!success) {
-                    return codes;
+                    return snapshot;
                 }
 
                 var result = specJson["result"] as JObject;
-                MergeCodes(codes, result?["functions"] as JArray);
-                MergeCodes(codes, result?["status"] as JArray);
+                MergeCapabilityEntries(snapshot, result?["functions"] as JArray);
+                MergeCapabilityEntries(snapshot, result?["status"] as JArray);
             }
             catch (Exception ex) {
                 Logger.Instance.LogMessage(TracingLevel.WARN,
                     "TuyaCloudClient: specification lookup failed for " + deviceId + ": " + ex.Message);
             }
 
-            return codes;
+            return snapshot;
         }
 
-        private static HashSet<string> ExtractCodes(JArray entries) {
-            var codes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            MergeCodes(codes, entries);
-            return codes;
+        internal static TuyaLightCapabilities BuildLightCapabilities(TuyaLight light, HashSet<string> codes, Dictionary<string, JObject> schemas) {
+            var snapshot = new CapabilitySnapshot();
+            foreach (var code in codes ?? Enumerable.Empty<string>()) {
+                if (!string.IsNullOrWhiteSpace(code)) snapshot.Codes.Add(code);
+            }
+            foreach (var kv in schemas ?? new Dictionary<string, JObject>()) {
+                if (!string.IsNullOrWhiteSpace(kv.Key) && kv.Value != null) snapshot.Schemas[kv.Key] = kv.Value;
+            }
+            return BuildLightCapabilities(light, snapshot);
         }
 
-        private static void MergeCodes(HashSet<string> codes, JArray entries) {
+        private static TuyaLightCapabilities BuildLightCapabilities(TuyaLight light, CapabilitySnapshot capabilities) {
+            var codes = capabilities?.Codes ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var schemas = capabilities?.Schemas ?? new Dictionary<string, JObject>(StringComparer.OrdinalIgnoreCase);
+            var fallback = LightSpec.For(new TuyaLight {
+                Category = light?.Category ?? "",
+                V2 = light?.V2 ?? false
+            });
+
+            var brightnessCode = ResolveBrightnessCode(codes, fallback.BrightnessCode);
+            var tempCode = ResolveTempCode(codes, fallback.TempCode);
+            var colorCode = ResolveColorCode(codes, fallback.ColorCode);
+
+            var caps = new TuyaLightCapabilities {
+                SwitchCode = ResolveSwitchCode(codes, fallback.SwitchCode),
+                WorkModeCode = ResolveWorkModeCode(codes, fallback.WorkModeCode),
+                BrightnessCode = brightnessCode,
+                BrightnessMin = ResolveSchemaInt(schemas, brightnessCode, "min", fallback.BrightnessMin),
+                BrightnessMax = ResolveSchemaInt(schemas, brightnessCode, "max", fallback.BrightnessMax),
+                TempCode = tempCode,
+                TempMin = ResolveSchemaInt(schemas, tempCode, "min", fallback.TempMin),
+                TempMax = ResolveSchemaInt(schemas, tempCode, "max", fallback.TempMax),
+                ColorCode = colorCode,
+                ColorHueMax = ResolveNestedSchemaInt(schemas, colorCode, "h", "max", fallback.ColorHueMax),
+                ColorSatMax = ResolveNestedSchemaInt(schemas, colorCode, "s", "max", fallback.ColorSatMax),
+                ColorValMax = ResolveNestedSchemaInt(schemas, colorCode, "v", "max", fallback.ColorValMax),
+                SupportsWhiteMode = codes.Contains("work_mode"),
+                SupportsColorMode = codes.Any(c => c.StartsWith("colour_data", StringComparison.OrdinalIgnoreCase))
+            };
+
+            return caps;
+        }
+
+        private static void MergeCapabilityEntries(CapabilitySnapshot snapshot, JArray entries) {
             if (entries == null) return;
             foreach (var entry in entries.OfType<JObject>()) {
                 var code = (string)entry["code"];
                 if (!string.IsNullOrWhiteSpace(code)) {
-                    codes.Add(code);
+                    snapshot.Codes.Add(code);
+                    var schema = ParseValuesSchema(entry["values"]);
+                    if (schema != null) {
+                        snapshot.Schemas[code] = schema;
+                    }
                 }
             }
+        }
+
+        private static JObject ParseValuesSchema(JToken values) {
+            if (values == null || values.Type == JTokenType.Null) return null;
+            if (values.Type == JTokenType.Object) return (JObject)values;
+            if (values.Type != JTokenType.String) return null;
+            var raw = ((string)values ?? "").Trim();
+            if (string.IsNullOrWhiteSpace(raw)) return null;
+            try {
+                return JObject.Parse(raw);
+            }
+            catch {
+                return null;
+            }
+        }
+
+        private static int ResolveSchemaInt(Dictionary<string, JObject> schemas, string code, string property, int fallback) {
+            if (schemas == null || string.IsNullOrWhiteSpace(code) || !schemas.TryGetValue(code, out var schema)) {
+                return fallback;
+            }
+
+            return ReadInt(schema[property], fallback);
+        }
+
+        private static int ResolveNestedSchemaInt(Dictionary<string, JObject> schemas, string code, string nested, string property, int fallback) {
+            if (schemas == null || string.IsNullOrWhiteSpace(code) || !schemas.TryGetValue(code, out var schema)) {
+                return fallback;
+            }
+
+            return ReadInt(schema[nested]?[property], fallback);
+        }
+
+        private static int ReadInt(JToken token, int fallback) {
+            if (token == null || token.Type == JTokenType.Null) return fallback;
+            if (token.Type == JTokenType.Integer) return (int)token;
+            if (token.Type == JTokenType.Float) return (int)Math.Round((double)token);
+            if (int.TryParse((string)token, out var parsed)) return parsed;
+            return fallback;
+        }
+
+        private static string ResolveSwitchCode(HashSet<string> codes, string fallback) {
+            if (codes.Contains("switch_led")) return "switch_led";
+            if (codes.Contains("switch")) return "switch";
+            return fallback;
+        }
+
+        private static string ResolveWorkModeCode(HashSet<string> codes, string fallback) {
+            if (codes.Contains("work_mode")) return "work_mode";
+            return fallback;
+        }
+
+        private static string ResolveBrightnessCode(HashSet<string> codes, string fallback) {
+            if (codes.Contains("bright_value_v2")) return "bright_value_v2";
+            if (codes.Contains("bright_value")) return "bright_value";
+            return fallback;
+        }
+
+        private static string ResolveTempCode(HashSet<string> codes, string fallback) {
+            if (codes.Contains("temp_value_v2")) return "temp_value_v2";
+            if (codes.Contains("temp_value")) return "temp_value";
+            return fallback;
+        }
+
+        private static string ResolveColorCode(HashSet<string> codes, string fallback) {
+            if (codes.Contains("colour_data_v2")) return "colour_data_v2";
+            if (codes.Contains("colour_data")) return "colour_data";
+            return fallback;
+        }
+
+        private static string ResolvePlugSwitchCode(HashSet<string> codes) {
+            var first = codes.FirstOrDefault(c => PlugSwitchCodePattern.IsMatch(c));
+            return string.IsNullOrWhiteSpace(first) ? "switch_1" : first;
         }
 
         private static bool LooksLikeLight(HashSet<string> codes) {
@@ -498,6 +667,12 @@ namespace TuyaLightController {
             return slug;
         }
 
+        private static IEnumerable<List<string>> Chunk(List<string> source, int size) {
+            for (int i = 0; i < source.Count; i += size) {
+                yield return source.Skip(i).Take(size).ToList();
+            }
+        }
+
         private async Task<JObject> SendSignedAsync(HttpMethod method, string path, string body, string accessToken) {
             string clientId, clientSecret, baseUrl;
             lock (_settingsLock) {
@@ -548,9 +723,33 @@ namespace TuyaLightController {
 
         private static string ResolveBaseUrl(string region) {
             switch ((region ?? "us").Trim().ToLowerInvariant()) {
-                case "eu": return "https://openapi.tuyaeu.com";
-                case "cn": return "https://openapi.tuyacn.com";
-                case "in": return "https://openapi.tuyain.com";
+                case "us":
+                case "us-west":
+                case "america":
+                case "western-america":
+                    return "https://openapi.tuyaus.com";
+                case "us-east":
+                case "ueaz":
+                case "eastern-america":
+                    return "https://openapi-ueaz.tuyaus.com";
+                case "eu":
+                case "eu-central":
+                case "central-europe":
+                case "europe":
+                    return "https://openapi.tuyaeu.com";
+                case "eu-west":
+                case "weaz":
+                case "western-europe":
+                    return "https://openapi-weaz.tuyaeu.com";
+                case "sg":
+                case "singapore":
+                    return "https://openapi-sg.iotbing.com";
+                case "cn":
+                case "china":
+                    return "https://openapi.tuyacn.com";
+                case "in":
+                case "india":
+                    return "https://openapi.tuyain.com";
                 default: return "https://openapi.tuyaus.com";
             }
         }

@@ -14,6 +14,7 @@ namespace TuyaLightController {
         {
             settings = SettingsCache.Load();
             settings.Normalize();
+            SettingsCache.Save(settings);
             TuyaApiClient.CurrentSettings = settings;
             ApplyToServer();
             GlobalSettingsManager.Instance.RequestGlobalSettings();

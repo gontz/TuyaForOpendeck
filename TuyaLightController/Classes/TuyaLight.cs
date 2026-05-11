@@ -20,5 +20,8 @@ namespace TuyaLightController {
 
         [JsonProperty("rgb")]
         public bool Rgb { get; set; }
+
+        [JsonProperty("capabilities")]
+        public TuyaLightCapabilities Capabilities { get; set; }
     }
 }

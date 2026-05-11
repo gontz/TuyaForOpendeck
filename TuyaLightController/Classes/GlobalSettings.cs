@@ -1,4 +1,5 @@
 using Newtonsoft.Json;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -42,6 +43,9 @@ namespace TuyaLightController {
             DefaultDevices?.Normalize();
             if (ServerPort <= 0 || ServerPort > 65535) ServerPort = 5000;
             if (string.IsNullOrWhiteSpace(TuyaRegion)) TuyaRegion = "us";
+            ApiUrl = (ApiUrl ?? "").Trim();
+            if (string.IsNullOrWhiteSpace(ApiUrl)) ApiUrl = "http://localhost:5000";
+            ApiToken = (ApiToken ?? "").Trim();
             TuyaClientId = (TuyaClientId ?? "").Trim();
             TuyaClientSecret = (TuyaClientSecret ?? "").Trim();
             if (Plugs == null) Plugs = new List<TuyaPlug>();

@@ -21,17 +21,21 @@ namespace TuyaLightController {
         public static GlobalSettings Load() {
             try {
                 var settings = LoadFromCacheFile();
-                if (HasUsableSettings(settings)) {
+                if (HasConfiguredSettings(settings)) {
+                    settings.Normalize();
                     return settings;
                 }
 
                 var fromProfiles = TryLoadFromProfiles();
                 if (fromProfiles != null) {
                     MergeMissing(settings, fromProfiles);
+                    settings.Normalize();
                     if (HasUsableSettings(settings)) {
                         Save(settings);
                     }
                 }
+
+                settings.Normalize();
                 return settings;
             }
             catch {
@@ -41,6 +45,8 @@ namespace TuyaLightController {
 
         public static void Save(GlobalSettings settings) {
             try {
+                settings = settings ?? new GlobalSettings();
+                settings.Normalize();
                 Directory.CreateDirectory(Path.GetDirectoryName(CachePath));
                 File.WriteAllText(CachePath, JsonConvert.SerializeObject(settings, Formatting.Indented));
             }
@@ -113,6 +119,19 @@ namespace TuyaLightController {
                     !string.IsNullOrWhiteSpace(settings.ApiToken)
                     || (settings.DefaultDevices?.DeviceSlugList?.Count ?? 0) > 0
                 );
+        }
+
+        private static bool HasConfiguredSettings(GlobalSettings settings) {
+            if (settings == null) {
+                return false;
+            }
+
+            return !string.IsNullOrWhiteSpace(settings.ApiToken)
+                || (settings.DefaultDevices?.DeviceSlugList?.Count ?? 0) > 0
+                || (settings.Plugs?.Count ?? 0) > 0
+                || (settings.Lights?.Count ?? 0) > 0
+                || !string.IsNullOrWhiteSpace(settings.TuyaClientId)
+                || !string.IsNullOrWhiteSpace(settings.TuyaClientSecret);
         }
 
         private static void MergeMissing(GlobalSettings target, GlobalSettings source) {

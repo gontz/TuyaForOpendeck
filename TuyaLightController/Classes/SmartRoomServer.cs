@@ -4,6 +4,7 @@ using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Text;
 using System.Threading;
@@ -146,12 +147,28 @@ namespace TuyaLightController {
             var path = req.Url.AbsolutePath ?? "/";
             var method = req.HttpMethod ?? "GET";
 
+            if (method == "OPTIONS") {
+                WriteCorsHeaders(ctx.Response);
+                ctx.Response.StatusCode = 204;
+                ctx.Response.ContentLength64 = 0;
+                try { ctx.Response.OutputStream.Close(); } catch { }
+                try { ctx.Response.Close(); } catch { }
+                return;
+            }
+
             string expectedToken;
             lock (_stateLock) { expectedToken = _expectedToken; }
-            var providedToken = req.Headers["Authorization"] ?? "";
-            if (!string.IsNullOrEmpty(expectedToken) && providedToken != expectedToken) {
-                await WriteJson(ctx, 401, new { error = "Unauthorized" }).ConfigureAwait(false);
-                return;
+            if (IsProtectedRoute(method, path) && !IsLoopbackRequest(ctx.Request)) {
+                if (string.IsNullOrWhiteSpace(expectedToken)) {
+                    await WriteJson(ctx, 401, new { error = "API token required for non-local requests" }).ConfigureAwait(false);
+                    return;
+                }
+
+                var providedToken = req.Headers["Authorization"] ?? "";
+                if (providedToken != expectedToken) {
+                    await WriteJson(ctx, 401, new { error = "Unauthorized" }).ConfigureAwait(false);
+                    return;
+                }
             }
 
             if (method == "GET" && path == "/devices") {
@@ -171,6 +188,11 @@ namespace TuyaLightController {
 
             if (method == "POST" && path == "/cloud/discover") {
                 await HandleCloudDiscover(ctx).ConfigureAwait(false);
+                return;
+            }
+
+            if (method == "POST" && path == "/status") {
+                await HandleStatus(ctx).ConfigureAwait(false);
                 return;
             }
 
@@ -222,7 +244,10 @@ namespace TuyaLightController {
             bool state = (bool?)body["state"] ?? false;
 
             var commands = new List<Dictionary<string, object>> {
-                new Dictionary<string, object> { ["code"] = "switch_1", ["value"] = state }
+                new Dictionary<string, object> {
+                    ["code"] = string.IsNullOrWhiteSpace(plug.SwitchCode) ? "switch_1" : plug.SwitchCode,
+                    ["value"] = state
+                }
             };
 
             try {
@@ -266,18 +291,30 @@ namespace TuyaLightController {
                     ["code"] = spec.WorkModeCode, ["value"] = mode
                 });
             }
+            else if (body["color"] != null && spec.SupportsColorMode) {
+                commands.Add(new Dictionary<string, object> {
+                    ["code"] = spec.WorkModeCode,
+                    ["value"] = "colour"
+                });
+            }
+            else if ((body["brightness"] != null || body["temp"] != null) && spec.SupportsWhiteMode) {
+                commands.Add(new Dictionary<string, object> {
+                    ["code"] = spec.WorkModeCode,
+                    ["value"] = "white"
+                });
+            }
             if (body["brightness"] != null) {
                 int pct = (int?)body["brightness"] ?? 0;
                 commands.Add(new Dictionary<string, object> {
                     ["code"] = spec.BrightnessCode,
-                    ["value"] = Scale(pct, 100, spec.BrightnessMin, spec.BrightnessMax)
+                    ["value"] = ScaleUtil.ScalePercent(pct, spec.BrightnessMin, spec.BrightnessMax)
                 });
             }
             if (body["temp"] != null) {
                 int pct = (int?)body["temp"] ?? 0;
                 commands.Add(new Dictionary<string, object> {
                     ["code"] = spec.TempCode,
-                    ["value"] = Scale(pct, 100, spec.TempMin, spec.TempMax)
+                    ["value"] = ScaleUtil.ScalePercent(pct, spec.TempMin, spec.TempMax)
                 });
             }
             if (body["color"] != null) {
@@ -297,8 +334,8 @@ namespace TuyaLightController {
                     ["code"] = spec.ColorCode,
                     ["value"] = new {
                         h = Math.Max(0, Math.Min(spec.ColorHueMax, h)),
-                        s = Scale(s, 100, 0, spec.ColorSatMax),
-                        v = Scale(v, 100, 0, spec.ColorValMax)
+                        s = ScaleUtil.ScalePercent(s, 0, spec.ColorSatMax),
+                        v = ScaleUtil.ScalePercent(v, 0, spec.ColorValMax)
                     }
                 });
             }
@@ -318,6 +355,7 @@ namespace TuyaLightController {
         }
 
         private async Task HandleCloudDiscover(HttpListenerContext ctx) {
+            var body = await ReadJsonBody(ctx.Request).ConfigureAwait(false);
             List<TuyaPlug> plugs;
             List<TuyaLight> lights;
             lock (_stateLock) {
@@ -326,18 +364,131 @@ namespace TuyaLightController {
             }
 
             try {
-                var discovered = await _cloud.DiscoverDevicesAsync(plugs, lights).ConfigureAwait(false);
+                var cloud = _cloud;
+                var region = ((string)body["tuyaRegion"] ?? "").Trim();
+                var clientId = ((string)body["tuyaClientId"] ?? "").Trim();
+                var clientSecret = ((string)body["tuyaClientSecret"] ?? "").Trim();
+                if (!string.IsNullOrWhiteSpace(clientId) && !string.IsNullOrWhiteSpace(clientSecret)) {
+                    cloud = new TuyaCloudClient();
+                    cloud.Configure(region, clientId, clientSecret);
+                }
+
+                Logger.Instance.LogMessage(TracingLevel.INFO,
+                    "SmartRoomServer: Tuya cloud discovery started for region=" + (string.IsNullOrWhiteSpace(region) ? "(saved)" : region));
+
+                var discovered = await cloud.DiscoverDevicesAsync(plugs, lights).ConfigureAwait(false);
+                Logger.Instance.LogMessage(TracingLevel.INFO,
+                    "SmartRoomServer: Tuya cloud discovery complete, plugs=" + discovered.Plugs.Count +
+                    ", lights=" + discovered.Lights.Count + ", ignored=" + discovered.IgnoredDevices);
                 await WriteJson(ctx, 200, discovered).ConfigureAwait(false);
             }
             catch (Exception ex) {
+                Logger.Instance.LogMessage(TracingLevel.ERROR,
+                    "SmartRoomServer: Tuya cloud discovery failed: " + ex.Message);
                 await WriteJson(ctx, 500, new { error = ex.Message }).ConfigureAwait(false);
             }
         }
 
-        private static int Scale(int val, int inMax, int outMin, int outMax) {
-            if (inMax <= 0) return outMin;
-            int scaled = (int)Math.Round((double)val * outMax / inMax);
-            return Math.Max(outMin, Math.Min(outMax, scaled));
+        private async Task HandleStatus(HttpListenerContext ctx) {
+            var body = await ReadJsonBody(ctx.Request).ConfigureAwait(false);
+            var slugArray = body["slugs"] as JArray;
+            var slugs = (slugArray ?? new JArray())
+                .Select(x => (string)x)
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            var responseDevices = new Dictionary<string, TuyaDeviceStatus>(StringComparer.OrdinalIgnoreCase);
+            if (slugs.Count == 0) {
+                await WriteJson(ctx, 200, new { devices = responseDevices }).ConfigureAwait(false);
+                return;
+            }
+
+            List<TuyaPlug> plugs;
+            List<TuyaLight> lights;
+            lock (_stateLock) {
+                plugs = new List<TuyaPlug>(_plugs);
+                lights = new List<TuyaLight>(_lights);
+            }
+
+            var deviceIds = new List<string>();
+            var slugToId = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var slug in slugs) {
+                if (slug.StartsWith("plug-", StringComparison.OrdinalIgnoreCase)) {
+                    if (int.TryParse(slug.Substring("plug-".Length), out int button)) {
+                        var plug = plugs.FirstOrDefault(p => p.Button == button);
+                        if (plug != null && !string.IsNullOrWhiteSpace(plug.Id)) {
+                            slugToId[slug] = plug.Id;
+                            deviceIds.Add(plug.Id);
+                        }
+                    }
+                    continue;
+                }
+
+                var light = lights.FirstOrDefault(l => string.Equals(l.Slug, slug, StringComparison.OrdinalIgnoreCase));
+                if (light != null && !string.IsNullOrWhiteSpace(light.Id)) {
+                    slugToId[slug] = light.Id;
+                    deviceIds.Add(light.Id);
+                }
+            }
+
+            var statusById = await _cloud.GetLatestStatusesAsync(deviceIds).ConfigureAwait(false);
+            foreach (var slug in slugs) {
+                var item = new TuyaDeviceStatus();
+                responseDevices[slug] = item;
+
+                if (!slugToId.TryGetValue(slug, out var deviceId)) {
+                    item.Reachable = false;
+                    item.Error = "device not configured";
+                    continue;
+                }
+
+                item.Id = deviceId;
+                if (slug.StartsWith("plug-", StringComparison.OrdinalIgnoreCase)) {
+                    var plug = plugs.FirstOrDefault(p => string.Equals(p.Id, deviceId, StringComparison.OrdinalIgnoreCase));
+                    item.Name = plug?.Name ?? "";
+                    item.IsLight = false;
+                    var switchCode = string.IsNullOrWhiteSpace(plug?.SwitchCode) ? "switch_1" : plug.SwitchCode;
+                    if (statusById.TryGetValue(deviceId, out var status)) {
+                        item.Reachable = true;
+                        item.State = StatusUtil.ReadSwitchState(status, switchCode);
+                    }
+                    else {
+                        item.Reachable = false;
+                        item.Error = "offline";
+                    }
+                    continue;
+                }
+
+                var light = lights.FirstOrDefault(l => string.Equals(l.Id, deviceId, StringComparison.OrdinalIgnoreCase));
+                item.Name = light?.Name ?? "";
+                item.IsLight = true;
+                if (statusById.TryGetValue(deviceId, out var lightStatus)) {
+                    item.Reachable = true;
+                    var spec = LightSpec.For(light);
+                    item.State = StatusUtil.ReadSwitchState(lightStatus, spec.SwitchCode);
+                }
+                else {
+                    item.Reachable = false;
+                    item.Error = "offline";
+                }
+            }
+
+            await WriteJson(ctx, 200, new { devices = responseDevices }).ConfigureAwait(false);
+        }
+
+        private static bool IsProtectedRoute(string method, string path) {
+            return
+                (method == "GET" && path == "/devices") ||
+                (method == "POST" && path == "/status") ||
+                (method == "POST" && path == "/cloud/discover") ||
+                (method == "POST" && path.StartsWith("/switch/", StringComparison.Ordinal)) ||
+                (method == "POST" && path.StartsWith("/light/", StringComparison.Ordinal));
+        }
+
+        private static bool IsLoopbackRequest(HttpListenerRequest req) {
+            var address = req?.RemoteEndPoint?.Address;
+            return address != null && IPAddress.IsLoopback(address);
         }
 
         private static async Task<JObject> ReadJsonBody(HttpListenerRequest req) {
@@ -355,8 +506,7 @@ namespace TuyaLightController {
             var bytes = Encoding.UTF8.GetBytes(json);
             ctx.Response.StatusCode = status;
             ctx.Response.ContentType = "application/json; charset=utf-8";
-            ctx.Response.Headers["Access-Control-Allow-Origin"] = "*";
-            ctx.Response.Headers["Access-Control-Allow-Headers"] = "Authorization,Content-Type";
+            WriteCorsHeaders(ctx.Response);
             ctx.Response.ContentLength64 = bytes.Length;
             try {
                 await ctx.Response.OutputStream.WriteAsync(bytes, 0, bytes.Length).ConfigureAwait(false);
@@ -365,6 +515,13 @@ namespace TuyaLightController {
                 try { ctx.Response.OutputStream.Close(); } catch { }
                 try { ctx.Response.Close(); } catch { }
             }
+        }
+
+        private static void WriteCorsHeaders(HttpListenerResponse response) {
+            response.Headers["Access-Control-Allow-Origin"] = "*";
+            response.Headers["Access-Control-Allow-Headers"] = "Authorization,Content-Type";
+            response.Headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS";
+            response.Headers["Access-Control-Max-Age"] = "600";
         }
     }
 }

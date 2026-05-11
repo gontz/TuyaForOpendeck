@@ -1,12 +1,11 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using BarRaider.SdTools;
 
 namespace TuyaLightController {
     [PluginActionId("com.gontz.tuyalightcontroller.turnonoffaction")]
     public class TurnOnOffAction : TuyaActionBase<TurnOnOffSettings> {
-        private bool isOn = false;
-
         public TurnOnOffAction(SDConnection connection, InitialPayload payload)
             : base(connection, payload)
         {
@@ -22,31 +21,50 @@ namespace TuyaLightController {
                 return;
             }
 
-            switch (localSettings.TargetState) {
+            var statuses = await TuyaApiClient.GetStatusesAsync(slugs);
+            var reachable = ToggleDecision.ReachableSlugs(slugs, statuses);
+            foreach (var slug in slugs) {
+                if (!reachable.Contains(slug)) {
+                    Logger.Instance.LogMessage(TracingLevel.WARN,
+                        "TurnOnOffAction: device offline/unreachable, skipping slug=" + slug);
+                }
+            }
+
+            if (reachable.Count == 0) {
+                await Connection.ShowAlert();
+                Logger.Instance.LogMessage(TracingLevel.WARN,
+                    "TurnOnOffAction: no reachable devices in selected set.");
+                return;
+            }
+
+            bool finalOn;
+            switch ((localSettings.TargetState ?? "").ToLowerInvariant()) {
                 case "on":
-                    await TurnOnWithOverrides(slugs);
-                    isOn = true;
+                    await TurnOnWithOverrides(reachable);
+                    finalOn = true;
                     break;
                 case "off":
-                    await TuyaApiClient.TurnOff(slugs);
-                    isOn = false;
+                    await TuyaApiClient.TurnOff(reachable);
+                    finalOn = false;
                     break;
                 default:
-                    if (isOn) { await TuyaApiClient.TurnOff(slugs); isOn = false; }
-                    else { await TurnOnWithOverrides(slugs); isOn = true; }
+                    if (!ToggleDecision.ShouldTurnOn(reachable, statuses)) {
+                        await TuyaApiClient.TurnOff(reachable);
+                        finalOn = false;
+                    }
+                    else {
+                        await TurnOnWithOverrides(reachable);
+                        finalOn = true;
+                    }
                     break;
             }
-            await Connection.SetStateAsync((uint)(isOn ? 0 : 1));
+
+            await Connection.SetStateAsync((uint)(finalOn ? 0 : 1));
         }
 
-        /// <summary>
-        /// Turn the slugs ON, then apply per-light brightness/temperature overrides for any
-        /// slug that has them. Plugs and slugs without overrides just stay on.
-        /// </summary>
         private async Task TurnOnWithOverrides(List<string> slugs) {
             await TuyaApiClient.TurnOn(slugs);
 
-            // Group by override values to minimize HTTP calls.
             var brightnessGroups = new Dictionary<int, List<string>>();
             var tempGroups = new Dictionary<int, List<string>>();
             foreach (var slug in slugs) {
@@ -66,19 +84,12 @@ namespace TuyaLightController {
             await Task.Delay(200);
 
             if (brightnessGroups.Count > 0) {
-                var tasks = new List<Task>();
-                foreach (var kv in brightnessGroups) {
-                    tasks.Add(TuyaApiClient.SetBrightness(kv.Value, kv.Key));
-                }
+                var tasks = brightnessGroups.Select(kv => TuyaApiClient.SetBrightness(kv.Value, kv.Key));
                 await Task.WhenAll(tasks);
-                if (tempGroups.Count > 0) await Task.Delay(150);
             }
-
             if (tempGroups.Count > 0) {
-                var tasks = new List<Task>();
-                foreach (var kv in tempGroups) {
-                    tasks.Add(TuyaApiClient.SetTemperature(kv.Value, kv.Key));
-                }
+                await Task.Delay(150);
+                var tasks = tempGroups.Select(kv => TuyaApiClient.SetTemperature(kv.Value, kv.Key));
                 await Task.WhenAll(tasks);
             }
         }

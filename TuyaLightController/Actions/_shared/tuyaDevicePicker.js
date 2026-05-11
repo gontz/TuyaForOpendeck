@@ -207,8 +207,8 @@
                 ? (getNested(localSettings, opts.apiUrlPath || 'apiUrl') || globalSettings.apiUrl || storedSettings.apiUrl || '')
                 : (globalSettings.apiUrl || storedSettings.apiUrl || getNested(localSettings, opts.apiUrlPath || 'apiUrl') || '');
               var apiToken = opts.preferLocal
-                ? (getNested(localSettings, opts.apiTokenPath || 'apiToken') || globalSettings.apiToken || storedSettings.apiToken || '')
-                : (globalSettings.apiToken || storedSettings.apiToken || getNested(localSettings, opts.apiTokenPath || 'apiToken') || '');
+                ? (getNested(localSettings, opts.apiTokenPath || 'apiToken') || globalSettings.apiToken || '')
+                : (globalSettings.apiToken || getNested(localSettings, opts.apiTokenPath || 'apiToken') || '');
 
               return fetchDevices(apiUrl, apiToken).then(function (devices) {
                 if (token !== state.refreshToken) return;
