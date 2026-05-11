@@ -2,6 +2,33 @@
 
 All notable changes to TuyaForOpendeck.
 
+## [1.5.0] — 2026-05-11
+
+### Added
+- **Status-aware Scene and Turn On/Off actions** — both actions query real device state via Tuya Cloud (`POST /status`) before deciding what to do. No more local `isActive`/`isOn` booleans drifting out of sync with reality.
+- **Scene toggle restored, but smarter** — pressing a Scene tile when every reachable light is already on now turns the scene off. First press still applies the scene.
+- **Plug-boot recovery** — when a Scene contains a plug whose downstream bulbs are unreachable on first probe, the action powers the plug, waits ~1.5 s, re-queries, and folds the now-booted bulbs back into the dispatch. Single press, no manual retry.
+- **Already-on lights skip `switch_led`** — Scene applied to a light that's currently on just nudges mode/brightness/temp instead of re-issuing the switch command (avoids unnecessary brightness "flicker").
+- **Schema-driven device capabilities** — discovery now reads `/v1.1/devices/{id}/specifications` and captures per-code `min`/`max` ranges + nested `h`/`s`/`v` schemas, baked into `TuyaLight.Capabilities`. `LightSpec.For()` prefers per-device capabilities over category defaults.
+- **`TuyaPlug.SwitchCode`** — captures whether the plug uses `switch_1` or `switch`. Some Tuya plugs only respond to the unsuffixed variant.
+- **`POST /status` endpoint** in `SmartRoomServer` — batched lookup (20 device IDs per cloud call) with per-device fallback. Returns reachability + on/off state.
+- **CORS preflight + loopback auth bypass** — `OPTIONS` requests get a 204 with CORS headers; loopback requests skip the token check so the local PI works without configuring one.
+- **`--self-test` flag** — `Program.Main --self-test` runs `SelfTestRunner` covering scaling, normalization, capability building, status parsing, dispatch planning, and toggle decisions. Exits 0/1 for CI.
+- **More categories in `LightSpec`** — added `dc`, `fwd`, `fsd` alongside `dd`/`xdd`.
+- **Bundled `sdpi-components.js`** — was loaded from CDN, now shipped with the plugin (works offline).
+
+### Changed
+- **`SmartRoomServer.HandleLight` auto-mode-switch** — sets `work_mode=white` before brightness/temp commands (or `work_mode=colour` before colour), so a bulb in the wrong mode actually responds to the values you send.
+- **`/cloud/discover` accepts credentials in the body** — the PI can run discovery against not-yet-saved Tuya Cloud credentials.
+- **`GlobalSettings.Normalize()` hardening** — empty `ApiUrl` defaults to `http://localhost:5000`, `ApiToken` is trimmed, and `SettingsCache` calls `Normalize()` on every Load and Save.
+
+### Fixed
+- **`deviceOverrides` per-key independence** — moving the brightness slider used to also write the warmth value (and vice-versa), which silently defeated the per-key "Use default" reset. Each slider now writes only its own key.
+- **`DeviceSlugSettings._deviceSlugListString` double-serialization** — the backing field was `public`, and Newtonsoft.Json serializes public fields by default, so saved settings had both `deviceSlugListString` and `_deviceSlugListString` keys. Made the field private.
+
+### Removed
+- **Local `isActive`/`isOn` flags in Scene and Turn On/Off** — replaced by status queries. (The action no longer goes out of sync when bulbs are controlled by another app, by voice, or by a wall switch.)
+
 ## [1.4.0] — 2026-05-07
 
 ### Added
