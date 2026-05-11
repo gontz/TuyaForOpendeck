@@ -285,15 +285,17 @@ window.addEventListener('load', function () {
                         bRange.addEventListener('input', function () { bVal.textContent = bRange.value; });
                         wRange.addEventListener('input', function () { wVal.textContent = wRange.value; });
 
-                        function saveDeviceOverride() {
+                        // Each slider writes only its own key so a per-key override stays independent.
+                        bRange.addEventListener('change', function () {
                             if (!overrides[d.slug]) overrides[d.slug] = {};
                             overrides[d.slug].brightness = parseInt(bRange.value);
+                            saveOverrides();
+                        });
+                        wRange.addEventListener('change', function () {
+                            if (!overrides[d.slug]) overrides[d.slug] = {};
                             overrides[d.slug].warmth = parseInt(wRange.value);
                             saveOverrides();
-                        }
-
-                        bRange.addEventListener('change', saveDeviceOverride);
-                        wRange.addEventListener('change', saveDeviceOverride);
+                        });
 
                         // Stop slider events from reaching the row's selection toggle.
                         settingsPanel.addEventListener('click', function (e) { e.stopPropagation(); });

@@ -279,15 +279,17 @@ window.addEventListener('load', function () {
                         bRange.addEventListener('input', function () { bVal.textContent = bRange.value; });
                         wRange.addEventListener('input', function () { wVal.textContent = wRange.value; });
 
-                        function saveDeviceOverride() {
+                        // Each slider writes only its own key so "Use default" on the other slider sticks.
+                        bRange.addEventListener('change', function () {
                             if (!overrides[d.slug]) overrides[d.slug] = {};
                             overrides[d.slug].brightness = parseInt(bRange.value);
+                            saveOverrides();
+                        });
+                        wRange.addEventListener('change', function () {
+                            if (!overrides[d.slug]) overrides[d.slug] = {};
                             overrides[d.slug].warmth = parseInt(wRange.value);
                             saveOverrides();
-                        }
-
-                        bRange.addEventListener('change', saveDeviceOverride);
-                        wRange.addEventListener('change', saveDeviceOverride);
+                        });
 
                         bReset.addEventListener('click', function (e) {
                             e.stopPropagation();

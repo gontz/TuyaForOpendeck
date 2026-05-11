@@ -12,7 +12,7 @@ namespace TuyaLightController {
     public class DeviceSlugSettings {
         private static readonly Regex SlugPattern = new Regex(@"^[a-z0-9-]+$", RegexOptions.Compiled);
 
-        public string _deviceSlugListString;
+        private string _deviceSlugListString;
 
         [JsonProperty(PropertyName = "deviceSlugListString")]
         public string DeviceSlugListString {
